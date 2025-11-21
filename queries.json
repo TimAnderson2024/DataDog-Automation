@@ -11,7 +11,8 @@
                 "sba_ulp_oom" : "env:ulp-prod status:error (OutOfMemoryError OR \"out of memory\" OR OOM)",
                 "sba_cls_504" : "env:cls-prod status:error @http.status_code:504 service:elb",
                 "sba_cls_502" : "env:cls-prod status:error @http.status_code:502 service:elb",
-                "filemover_failed" : "kube_namespace:*ktrs run_job.sh result for job failed env:(cls-prod OR ulp-prod) pod_name:*"
+                "filemover_failed" : "kube_namespace:*ktrs run_job.sh result for job failed env:(cls-prod OR ulp-prod) pod_name:*",
+                "osc_synthetic" : "@test.id:bsi-2qz-vvt @result.status:failed "
             }
         },
         {

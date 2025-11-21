@@ -69,11 +69,14 @@ def run_queries():
         filemover_failed=metrics_dict.get("filemover_failed", "None"),
         los_504=metrics_dict.get("los_502", "None"),
         los_502=metrics_dict.get("los_504", "None"),
-        osc_synthetic="",
+        osc_synthetic=metrics_dict.get("osc_synthetic", "No Failures"),
         osc_failed_backend="",
         osc_p95=""
     )
-    print(output)
+    output_path = f"{os.getenv('OUTPUT_FILE')} {datetime.today().date()}.md"
+    print(output_path)
+    with open(output_path, 'w') as out_f:
+        out_f.write(output)
 
 
 def main():

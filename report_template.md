@@ -1,5 +1,3 @@
-# Daily Infra Report: {{ date }}
-
 ## SBA Account
 - **ULP Environment:** 
     - 504: {{ sba_ulp_504 }}
