@@ -14,7 +14,7 @@
 - 502: {{ los_502 }}
 
 ## OSC Account
-- Synthetic Tests: {{ osc_synthetic }}
+- Synthetic Test Failures: {{ osc_synthetic }}
 - Sentry:
     - Failed Backend Rates: {{ osc_failed_backend }}
     - Unusual P95 scores: {{ osc_p95 }}
