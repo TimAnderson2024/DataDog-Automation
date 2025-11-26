@@ -18,7 +18,7 @@ def get_aggregate(config: Configuration, query_string: str):
                 filter=LogsQueryFilter(
                     query=query_string,
                     _from="now-24h",
-                    to="now"
+                    to="now" 
                 ),
                 compute=[
                     LogsCompute(
@@ -60,20 +60,20 @@ def run_queries():
 
     output = template.render(
         date=datetime.today().date(),
-        sba_ulp_504=metrics_dict.get("sba_ulp_504", "None"),
-        sba_ulp_502=metrics_dict.get("sba_ulp_502", "None"),
-        sba_ulp_oom=metrics_dict.get("sba_ulp_oom", "None"),
-        cls_prod_504=metrics_dict.get("sba_cls_504", "None"),
-        cls_prod_502=metrics_dict.get("sba_cls_502", "None"),
-        cls_prod_oom=metrics_dict.get("sba_cls_oom", "None"),
-        filemover_failed=metrics_dict.get("filemover_failed", "None"),
-        los_504=metrics_dict.get("los_502", "None"),
-        los_502=metrics_dict.get("los_504", "None"),
+        sba_ulp_504=metrics_dict.get("sba_ulp_504", "0"),
+        sba_ulp_502=metrics_dict.get("sba_ulp_502", "0"),
+        sba_ulp_oom=metrics_dict.get("sba_ulp_oom", "0"),
+        cls_prod_504=metrics_dict.get("sba_cls_504", "0"),
+        cls_prod_502=metrics_dict.get("sba_cls_502", "0"),
+        cls_prod_oom=metrics_dict.get("sba_cls_oom", "0"),
+        filemover_failed=metrics_dict.get("filemover_failed", "0"),
+        los_504=metrics_dict.get("los_502", "0"),
+        los_502=metrics_dict.get("los_504", "0"),
         osc_synthetic=metrics_dict.get("osc_synthetic", "No Failures"),
         osc_failed_backend="",
         osc_p95=""
     )
-    output_path = f"{os.getenv('OUTPUT_FILE')} {datetime.today().date()}.md"
+    output_path = f"{os.getenv('OUTPUT_PATH')} {datetime.today().date()}.md"
     print(output_path)
     with open(output_path, 'w') as out_f:
         out_f.write(output)
