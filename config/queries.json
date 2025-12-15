@@ -1,29 +1,33 @@
 {
-    "dd_url": "datadoghq.com",
-    "environments": [
-        {
-            "name": "ulp",
-            "API_KEY": "DD_ULP_API_KEY",
-            "APP_KEY": "DD_ULP_APP_KEY",
-            "queries": {
-                "ulp_504" : "env:ulp-prod status:error @http.status_code:504 service:elb",
-                "ulp_502" : "env:ulp-prod status:error @http.status_code:502 service:elb",
-                "ulp_oom" : "env:ulp-prod status:error (OutOfMemoryError OR \"out of memory\" OR OOM)",
-                "cls_504" : "env:cls-prod status:error @http.status_code:504 service:elb",
-                "cls_502" : "env:cls-prod status:error @http.status_code:502 service:elb",
-                "cls_oom" : "env:cls-prod status:error (OutOfMemoryError OR \"out of memory\" OR OOM)",
-                "filemover_failed" : "kube_namespace:*ktrs run_job.sh result for job failed env:(cls-prod OR ulp-prod) pod_name:*",
-                "osc_synthetic" : "@test.id:bsi-2qz-vvt @result.status:failed "
-            }
-        },
-        {
-            "name": "los",
-            "API_KEY": "DD_LOS_API_KEY",
-            "APP_KEY": "DD_LOS_APP_KEY",
-            "queries": {
-                "los_502" : "env:prod status:error @http.status_code:502",
-                "los_504" : "env:prod status:error @http.status_code:504"
-            }
+    "ulp": {
+        "DD_URL": "datadoghq.com",
+        "API_KEY": "DD_ULP_API_KEY",
+        "APP_KEY": "DD_ULP_APP_KEY",
+        "queries": {
+            "ulp_504": "env:ulp-prod status:error @http.status_code:504 service:elb",
+            "ulp_502": "env:ulp-prod status:error @http.status_code:502 service:elb",
+            "ulp_oom": "env:ulp-prod status:error (OutOfMemoryError OR \"out of memory\" OR OOM)",
+            "filemover_failed": "kube_namespace:*ktrs run_job.sh result for job failed env:(cls-prod OR ulp-prod) pod_name:*",
+            "osc_synthetic": "@test.id:bsi-2qz-vvt @result.status:failed "
         }
-    ]
+    },
+    "cls": {
+        "DD_URL": "datadoghq.com",
+        "API_KEY": "DD_ULP_API_KEY",
+        "APP_KEY": "DD_ULP_APP_KEY",
+        "queries": {
+            "cls_504": "env:cls-prod status:error @http.status_code:504 service:elb",
+            "cls_502": "env:cls-prod status:error @http.status_code:502 service:elb",
+            "cls_oom": "env:cls-prod status:error (OutOfMemoryError OR \"out of memory\" OR OOM)"
+        }
+    },
+    "los": {
+        "DD_URL": "datadoghq.com",
+        "API_KEY": "DD_LOS_API_KEY",
+        "APP_KEY": "DD_LOS_APP_KEY",
+        "queries": {
+            "los_502": "env:prod status:error @http.status_code:502",
+            "los_504": "env:prod status:error @http.status_code:504"
+        }
+    }
 }

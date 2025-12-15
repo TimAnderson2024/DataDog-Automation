@@ -14,10 +14,6 @@ from jinja2 import Template
 from utils import json_helpers
 from utils.query import get_dd_config, get_aggregate_count
 
-def run_query(dd_config: Configuration, query_string: str, time_from: str):
-    return get_aggregate_count(dd_config, query_string, time_from)
-
-
 def get_env_data(dd_config: Configuration, queries: dict) -> dict:
     env_data = {}
     for metric, query in queries.items():
@@ -44,9 +40,10 @@ def create_report():
     queries_json = json_helpers.get_json_config('config/queries.json')
     env_data = {}
 
-    for env in queries_json["environments"]:
-        env_config = get_dd_config(os.getenv(env["API_KEY"]), os.getenv(env["APP_KEY"]), queries_json["dd_url"])
-        env_data = env_data | get_env_data(env_config, env["queries"])
+    for env in queries_json.keys():
+        env_config = get_dd_config(env)
+        env_queries = queries_json[env]["queries"]
+        env_data = env_data | get_env_data(env_config, env_queries)
     
     out_path = write_report(env_data)
     print(f"View report: \n{out_path}")
