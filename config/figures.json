@@ -1,0 +1,12 @@
+{
+    "environments": [
+        "ulp", 
+        "cls",
+        "los"
+    ],
+    "error_types": [
+        "504",
+        "502",
+        "OOM Pods"
+    ]
+}

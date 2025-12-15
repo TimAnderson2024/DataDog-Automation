@@ -1,5 +1,7 @@
+#!/usr/bin/env python
+
 import os
-import json
+from utils import json_helpers
 from dotenv import load_dotenv
 from datadog_api_client import ApiClient, Configuration
 from datadog_api_client.v2.api.logs_api import LogsApi
@@ -41,8 +43,7 @@ def get_config(api_key: str, app_key: str):
     return ddconfig
 
 def run_queries():
-    with open('queries.json') as f:
-        queries_json = json.load(f)
+    queries_json = json_helpers.get_json_config('config/queries.json')
 
     metrics_dict = {}
     for env in queries_json["environments"]:
@@ -77,7 +78,8 @@ def run_queries():
     with open(output_path, 'w') as out_f:
         out_f.write(output)
     
-    print(f"Report written to: {output_path}")
+    print(f"View report:")
+    print(output_path)
 
 
 def main():

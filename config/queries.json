@@ -1,10 +1,9 @@
 {
     "environments": [
         {
-            "name": "sba-ulp",
+            "name": "ulp",
             "API_KEY": "DD_SBA_ULP_API_KEY",
             "APP_KEY": "DD_SBA_ULP_APP_KEY",
-            "DASH_ID": "fbz-ugm-drn",
             "queries": {
                 "sba_ulp_504" : "env:ulp-prod status:error @http.status_code:504 service:elb",
                 "sba_ulp_502" : "env:ulp-prod status:error @http.status_code:502 service:elb",
@@ -19,7 +18,6 @@
             "name": "los",
             "API_KEY": "DD_LOS_API_KEY",
             "APP_KEY": "DD_LOS_APP_KEY",
-            "DASH_ID": "qgk-td2-h6d",
             "queries": {
                 "los_502" : "env:prod status:error @http.status_code:502",
                 "los_504" : "env:prod status:error @http.status_code:504"
