@@ -74,9 +74,10 @@ def run_queries():
         osc_p95=""
     )
     output_path = f"{os.getenv('OUTPUT_PATH')} {datetime.today().date()}.md"
-    print(output_path)
     with open(output_path, 'w') as out_f:
         out_f.write(output)
+    
+    print(f"Report written to: {output_path}")
 
 
 def main():

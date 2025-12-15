@@ -1,0 +1,8 @@
+Modify this file and then
+
+DD_SITE=datadoghq.com
+OUTPUT_PATH=
+DD_SBA_ULP_API_KEY=
+DD_SBA_ULP_APP_KEY=
+DD_LOS_API_KEY=
+DD_LOS_APP_KEY=
