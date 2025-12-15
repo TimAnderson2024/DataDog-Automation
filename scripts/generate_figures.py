@@ -1,9 +1,18 @@
 #!/usr/bin/env python
 
 import numpy as np
+import plotly.io as pio
 import plotly.graph_objects as go
 
+from utils import json_helpers
+
+pio.renderers.default = "browser"
+
+
 def generate_heatmap():
+    config = json_helpers.get_json_config('config/figures.json')
+    print(config)
+
     current = np.array([
         [7, 7, 1],
         [1, 1, 1],
@@ -31,8 +40,8 @@ def generate_heatmap():
     fig = go.Figure(
         data=go.Heatmap(
             z=pct_diff,                     # color is driven by deviation
-            x=error_types,
-            y=services,
+            x=config["error_types"],
+            y=config["environments"],
             colorscale="RdYlGn_r",
             zmid=0,                         # center colors at 0%
             text=text,

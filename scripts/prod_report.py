@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 
 import os
-from utils import json_helpers
 from dotenv import load_dotenv
 from datadog_api_client import ApiClient, Configuration
 from datadog_api_client.v2.api.logs_api import LogsApi
@@ -12,79 +11,52 @@ from datadog_api_client.v2.model.logs_aggregation_function import LogsAggregatio
 from datetime import datetime
 from jinja2 import Template
 
-def get_aggregate(config: Configuration, query_string: str):
-    with ApiClient(config) as api_client:
-        api_instance = LogsApi(api_client)
-        response = api_instance.aggregate_logs(
-            body=LogsAggregateRequest(
-                filter=LogsQueryFilter(
-                    query=query_string,
-                    _from="now-24h",
-                    to="now" 
-                ),
-                compute=[
-                    LogsCompute(
-                        aggregation=LogsAggregationFunction.COUNT
-                    )
-                ]
-            )
-        )
-        
-        if response.data.buckets and len(response.data.buckets) > 0:
-            return response.data.buckets[0].computes.get('c0', 0)
-        return 0
+from utils import json_helpers
+from utils.query import get_dd_config, get_aggregate_count
 
-def get_config(api_key: str, app_key: str):
-    ddconfig = Configuration()
-    ddconfig.server_variables["site"] = os.getenv("DD_SITE")
-    ddconfig.api_key["apiKeyAuth"] = api_key
-    ddconfig.api_key["appKeyAuth"] = app_key
+def run_query(dd_config: Configuration, query_string: str, time_from: str):
+    return get_aggregate_count(dd_config, query_string, time_from)
 
-    return ddconfig
 
-def run_queries():
-    queries_json = json_helpers.get_json_config('config/queries.json')
+def get_env_data(dd_config: Configuration, queries: dict) -> dict:
+    env_data = {}
+    for metric, query in queries.items():
+        env_data[metric] = get_aggregate_count(dd_config, query, "now-24h")
 
-    metrics_dict = {}
-    for env in queries_json["environments"]:
-        # Get the correct configuration for the environment
-        api_key = os.getenv(env.get("API_KEY"))
-        app_key = os.getenv(env.get("APP_KEY"))
-        env_config = get_config(api_key=api_key, app_key=app_key)
-        
-        # Run each query and store results
-        for metric, query_string in env["queries"].items():
-            metrics_dict[metric] = int(get_aggregate(env_config, query_string))
-    
-    with open('report_template.md') as f:
+    return env_data
+
+def write_report(compiled_data: dict) -> str:
+    with open('templates/report_template.md') as f:
         template = Template(f.read())
 
     output = template.render(
         date=datetime.today().date(),
-        sba_ulp_504=metrics_dict.get("sba_ulp_504", "0"),
-        sba_ulp_502=metrics_dict.get("sba_ulp_502", "0"),
-        sba_ulp_oom=metrics_dict.get("sba_ulp_oom", "0"),
-        cls_prod_504=metrics_dict.get("sba_cls_504", "0"),
-        cls_prod_502=metrics_dict.get("sba_cls_502", "0"),
-        cls_prod_oom=metrics_dict.get("sba_cls_oom", "0"),
-        filemover_failed=metrics_dict.get("filemover_failed", "0"),
-        los_504=metrics_dict.get("los_502", "0"),
-        los_502=metrics_dict.get("los_504", "0"),
-        osc_synthetic=metrics_dict.get("osc_synthetic", "No Failures"),
-        osc_failed_backend="",
-        osc_p95=""
+        data=compiled_data
     )
+
     output_path = f"{os.getenv('OUTPUT_PATH')} {datetime.today().date()}.md"
     with open(output_path, 'w') as out_f:
         out_f.write(output)
     
-    print(f"View report:")
-    print(output_path)
+    return output_path
+
+def create_report():
+    queries_json = json_helpers.get_json_config('config/queries.json')
+    env_data = {}
+
+    for env in queries_json["environments"]:
+        env_config = get_dd_config(os.getenv(env["API_KEY"]), os.getenv(env["APP_KEY"]), queries_json["dd_url"])
+        env_data = env_data | get_env_data(env_config, env["queries"])
+    
+    out_path = write_report(env_data)
+    print(f"View report: \n{out_path}")
 
 
 def main():
     load_dotenv()
-    run_queries()
+    create_report()
+    
+
 
 if __name__ == "__main__":
     main()

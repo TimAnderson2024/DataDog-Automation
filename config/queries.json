@@ -1,15 +1,17 @@
 {
+    "dd_url": "datadoghq.com",
     "environments": [
         {
             "name": "ulp",
-            "API_KEY": "DD_SBA_ULP_API_KEY",
-            "APP_KEY": "DD_SBA_ULP_APP_KEY",
+            "API_KEY": "DD_ULP_API_KEY",
+            "APP_KEY": "DD_ULP_APP_KEY",
             "queries": {
-                "sba_ulp_504" : "env:ulp-prod status:error @http.status_code:504 service:elb",
-                "sba_ulp_502" : "env:ulp-prod status:error @http.status_code:502 service:elb",
-                "sba_ulp_oom" : "env:ulp-prod status:error (OutOfMemoryError OR \"out of memory\" OR OOM)",
-                "sba_cls_504" : "env:cls-prod status:error @http.status_code:504 service:elb",
-                "sba_cls_502" : "env:cls-prod status:error @http.status_code:502 service:elb",
+                "ulp_504" : "env:ulp-prod status:error @http.status_code:504 service:elb",
+                "ulp_502" : "env:ulp-prod status:error @http.status_code:502 service:elb",
+                "ulp_oom" : "env:ulp-prod status:error (OutOfMemoryError OR \"out of memory\" OR OOM)",
+                "cls_504" : "env:cls-prod status:error @http.status_code:504 service:elb",
+                "cls_502" : "env:cls-prod status:error @http.status_code:502 service:elb",
+                "cls_oom" : "env:cls-prod status:error (OutOfMemoryError OR \"out of memory\" OR OOM)",
                 "filemover_failed" : "kube_namespace:*ktrs run_job.sh result for job failed env:(cls-prod OR ulp-prod) pod_name:*",
                 "osc_synthetic" : "@test.id:bsi-2qz-vvt @result.status:failed "
             }
