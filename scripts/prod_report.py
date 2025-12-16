@@ -11,7 +11,7 @@ from datadog_api_client.v2.model.logs_aggregation_function import LogsAggregatio
 from datetime import datetime
 from jinja2 import Template
 
-from utils import json_helpers
+from utils.json_helpers import get_json_config
 from utils.query import get_dd_config, get_aggregate_count
 
 def get_env_data(dd_config: Configuration, queries: dict) -> dict:
@@ -37,14 +37,17 @@ def write_report(compiled_data: dict) -> str:
     return output_path
 
 def create_report():
-    queries_json = json_helpers.get_json_config('config/queries.json')
+    json_config = get_json_config('config/queries.json')
     env_data = {}
 
-    for env in queries_json.keys():
-        env_config = get_dd_config(env)
-        env_queries = queries_json[env]["queries"]
-        env_data = env_data | get_env_data(env_config, env_queries)
-    
+    for env in json_config.keys():
+        env_config, env_queries = json_config[env], json_config[env]["queries"]
+        try:
+            dd_config = get_dd_config(env_config)
+            env_data = env_data | get_env_data(dd_config, env_queries)
+        except KeyError:
+            print(f"Skipping {env} due to missing API keys.")
+
     out_path = write_report(env_data)
     print(f"View report: \n{out_path}")
 

@@ -8,12 +8,13 @@ from datadog_api_client.v2.model.logs_aggregation_function import LogsAggregatio
 
 from utils import json_helpers
 
-def get_dd_config(env_name):
-    env_config = json_helpers.get_json_config('config/queries.json')["ulp"]
-    print(env_config)
-    
+def get_dd_config(env_config: dict) -> Configuration:
     ddconfig = Configuration()
     ddconfig.server_variables["site"] = env_config["DD_URL"]
+
+    if not os.getenv(env_config["API_KEY"]) or not os.getenv(env_config["APP_KEY"]):
+        raise KeyError("API_KEY and APP_KEY must be defined in the environment configuration.")
+    
     ddconfig.api_key["apiKeyAuth"] = os.getenv(env_config["API_KEY"])
     ddconfig.api_key["appKeyAuth"] = os.getenv(env_config["APP_KEY"])
 
@@ -42,14 +43,14 @@ def get_aggregate_count(dd_config: Configuration, query_string: str, time_from: 
         return 0
     
 
-def get_two_week_average(dd_config: Configuration, query_string: str) -> int:
+def get_average(dd_config: Configuration, query_string: str, time_from: str) -> int:
     with ApiClient(dd_config) as api_client:
         api_instance = LogsApi(api_client)
         response = api_instance.aggregate_logs(
             body=LogsAggregateRequest(
                 filter=LogsQueryFilter(
                     query=query_string,
-                    _from="now-14d",
+                    _from=time_from,
                     to="now" 
                 ),
                 compute=[
@@ -59,6 +60,8 @@ def get_two_week_average(dd_config: Configuration, query_string: str) -> int:
                 ]
             )
         )
+
+        print(response.data)
         
         if response.data.buckets and len(response.data.buckets) > 0:
             total_count = int(response.data.buckets[0].computes.get('c0', 0))

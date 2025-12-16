@@ -26,8 +26,8 @@
         "API_KEY": "DD_LOS_API_KEY",
         "APP_KEY": "DD_LOS_APP_KEY",
         "queries": {
-            "los_502": "env:prod status:error @http.status_code:502",
-            "los_504": "env:prod status:error @http.status_code:504"
+            "los_504": "env:prod status:error @http.status_code:504",
+            "los_502": "env:prod status:error @http.status_code:502"
         }
     }
 }
