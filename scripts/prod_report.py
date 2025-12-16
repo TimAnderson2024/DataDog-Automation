@@ -30,7 +30,7 @@ def write_report(compiled_data: dict) -> str:
         data=compiled_data
     )
 
-    output_path = f"{os.getenv('OUTPUT_PATH')} {datetime.today().date()}.md"
+    output_path = f"{os.getenv('OUTPUT_PATH')}Infra Report {datetime.today().date()}.md"
     with open(output_path, 'w') as out_f:
         out_f.write(output)
     

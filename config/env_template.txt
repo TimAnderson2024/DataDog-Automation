@@ -1,7 +1,4 @@
-Modify this file and then
-
-DD_SITE=datadoghq.com
-OUTPUT_PATH=
+OUTPUT_PATH=C:\Users\TAnderson\Documents\Obsidian Notes\Daily Infra Report\
 DD_SBA_ULP_API_KEY=
 DD_SBA_ULP_APP_KEY=
 DD_LOS_API_KEY=
