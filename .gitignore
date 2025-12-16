@@ -2,3 +2,4 @@ scripts/utils/__pycache__/__init__.cpython-314.pyc
 scripts/utils/__pycache__/json_helpers.cpython-314.pyc
 scripts/utils/__pycache__/query.cpython-314.pyc
 .env
+out.txt
