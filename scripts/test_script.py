@@ -35,11 +35,11 @@ def main():
     config = json_helpers.get_json_config('config/queries.json')["ulp"]
     dd_config = get_dd_config(config) 
     time_to = datetime.now()
-    time_from = time_to - timedelta(hours=24)
+    time_from = time_to - timedelta(weeks=1)
     time_to = time_to.isoformat()
     time_from = time_from.isoformat()
 
-    query_logs(dd_config, "pod_name:stgwe-filemover-ktrs-etran-etran-loan-rel-upload-29432390-sph27", time_from, time_to)
+    query_logs(dd_config, "pod_name:ulp-backend-58c9bb59c7-6l2qm", time_from, time_to)
 
 
 

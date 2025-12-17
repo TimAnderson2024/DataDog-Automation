@@ -8,6 +8,7 @@ from datadog_api_client.v2.model.logs_query_filter import LogsQueryFilter
 from datadog_api_client.v2.model.logs_compute import LogsCompute
 from datadog_api_client.v2.model.logs_aggregation_function import LogsAggregationFunction
 from datadog_api_client.v2.model.logs_list_request import LogsListRequest
+from datadog_api_client.v2.model.logs_list_request_page import LogsListRequestPage
 from datadog_api_client.v2.model.logs_sort import LogsSort
 
 from utils import json_helpers
@@ -24,32 +25,35 @@ def get_dd_config(env_config: dict) -> Configuration:
 
     return ddconfig
 
-def query_logs(dd_config: Configuration, query_string: str, time_from: str, time_to: str):
+def query_logs(dd_config: Configuration, query_string: str, time_from: str, time_to: str) -> list[dict]:
     with ApiClient(dd_config) as api_client:
         api_instance = LogsApi(api_client)
-
-        response = api_instance.list_logs(
-            body = LogsListRequest(
+        query_body = LogsListRequest(
                 filter=LogsQueryFilter(
                     query=query_string,
                     _from=time_from,
                     to=time_to 
                 ),
-                sort=LogsSort.TIMESTAMP_ASCENDING
+                sort=LogsSort.TIMESTAMP_DESCENDING,
+                page=LogsListRequestPage(limit=1000)
             )
-        )
 
-    response = response.to_dict()
-    # Remove 'tags' from each log's 'attributes'
-    for entry in response.get('data', []):
-        attributes = entry.get('attributes', {})
-        if 'tags' in attributes:
-            del attributes['tags']
+        all_logs = []
+        logs_processed = 0
+        while True:
+            response = api_instance.list_logs(body=query_body)
+            response_data = response.data
+            response_metadata = response.meta.to_dict()
 
-    with open("./output/log_query.json", "w") as f:
-        json.dump(response, f, ensure_ascii=False, indent=2)
+            all_logs.extend(response_data)
+            logs_processed += len(response_data)
+            print(f"Processed {logs_processed} log entries...")
+                    
+            if not response_metadata.get('page', None):
+                break
+            query_body.page.cursor = response_metadata['page']['after']
         
-    return response
+    return all_logs
 
 def query_aggregate_count(dd_config: Configuration, query_string: str, time_from: str, time_to: str) -> int:
     with ApiClient(dd_config) as api_client:
