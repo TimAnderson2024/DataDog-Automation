@@ -1,4 +1,5 @@
 import os
+import json
 from datetime import datetime, timedelta
 from datadog_api_client import ApiClient, Configuration
 from datadog_api_client.v2.api.logs_api import LogsApi
@@ -6,6 +7,8 @@ from datadog_api_client.v2.model.logs_aggregate_request import LogsAggregateRequ
 from datadog_api_client.v2.model.logs_query_filter import LogsQueryFilter
 from datadog_api_client.v2.model.logs_compute import LogsCompute
 from datadog_api_client.v2.model.logs_aggregation_function import LogsAggregationFunction
+from datadog_api_client.v2.model.logs_list_request import LogsListRequest
+from datadog_api_client.v2.model.logs_sort import LogsSort
 
 from utils import json_helpers
 
@@ -21,9 +24,37 @@ def get_dd_config(env_config: dict) -> Configuration:
 
     return ddconfig
 
+def query_logs(dd_config: Configuration, query_string: str, time_from: str, time_to: str):
+    with ApiClient(dd_config) as api_client:
+        api_instance = LogsApi(api_client)
+
+        response = api_instance.list_logs(
+            body = LogsListRequest(
+                filter=LogsQueryFilter(
+                    query=query_string,
+                    _from=time_from,
+                    to=time_to 
+                ),
+                sort=LogsSort.TIMESTAMP_ASCENDING
+            )
+        )
+
+    response = response.to_dict()
+    # Remove 'tags' from each log's 'attributes'
+    for entry in response.get('data', []):
+        attributes = entry.get('attributes', {})
+        if 'tags' in attributes:
+            del attributes['tags']
+
+    with open("./output/log_query.json", "w") as f:
+        json.dump(response, f, ensure_ascii=False, indent=2)
+        
+    return response
+
 def query_aggregate_count(dd_config: Configuration, query_string: str, time_from: str, time_to: str) -> int:
     with ApiClient(dd_config) as api_client:
         api_instance = LogsApi(api_client)
+
         response = api_instance.aggregate_logs(
             body=LogsAggregateRequest(
                 filter=LogsQueryFilter(

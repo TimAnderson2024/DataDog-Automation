@@ -6,9 +6,7 @@ from dotenv import load_dotenv
 from utils import json_helpers
 from utils.query import *
 
-def main():
-    load_dotenv()
-    
+def fig_test():
     los_config = json_helpers.get_json_config('config/queries.json')["los"]
     los_queries = los_config["queries"]
     dd_config = get_dd_config(los_config) 
@@ -28,6 +26,21 @@ def main():
         print(f"  Weekday 2-week Aggregate: {weekday_aggregate}")
         print(f"  Weekday Breakdown: {weekday_breakdown}")
         print(f"  Weekend Breakdown: {weekend_breakdown}")
+
+
+
+def main():
+    load_dotenv()
+    
+    config = json_helpers.get_json_config('config/queries.json')["ulp"]
+    dd_config = get_dd_config(config) 
+    time_to = datetime.now()
+    time_from = time_to - timedelta(hours=24)
+    time_to = time_to.isoformat()
+    time_from = time_from.isoformat()
+
+    query_logs(dd_config, "pod_name:stgwe-filemover-ktrs-etran-etran-loan-rel-upload-29432390-sph27", time_from, time_to)
+
 
 
 if __name__ == "__main__":

@@ -12,12 +12,12 @@ from datetime import datetime
 from jinja2 import Template
 
 from utils.json_helpers import get_json_config
-from utils.query import get_dd_config, get_aggregate_count
+from utils.query import get_dd_config, get_simple_aggregate
 
 def get_env_data(dd_config: Configuration, queries: dict) -> dict:
     env_data = {}
     for metric, query in queries.items():
-        env_data[metric] = get_aggregate_count(dd_config, query, "now-24h")
+        env_data[metric] = get_simple_aggregate(dd_config, query, "now-24h")
 
     return env_data
 
