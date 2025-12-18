@@ -10,7 +10,7 @@ pio.renderers.default = "browser"
 
 
 def generate_heatmap():
-    config = json_helpers.get_json_config('config/figures.json')
+    config = json_helpers.load_json_from_file('config/figures.json')
     print(config)
 
     current = np.array([

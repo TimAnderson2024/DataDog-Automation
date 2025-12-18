@@ -1,6 +1,6 @@
 from datadog_api_client import Configuration
 from dotenv import load_dotenv
-from utils.json_helpers import get_json_config
+from utils.json_helpers import load_json_from_file
 from utils.query import get_dd_config, get_simple_aggregate, get_aggregate_avg
 
 class Data_Point:
@@ -28,7 +28,7 @@ def get_env_data(dd_config: Configuration, env: str, queries: dict) -> dict:
 
 def main():
     load_dotenv()
-    json_config = get_json_config("config/queries.json")
+    json_config = load_json_from_file("config/queries.json")
     
     env_data = { }
     for env in json_config.keys():

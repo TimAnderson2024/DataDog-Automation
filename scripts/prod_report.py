@@ -11,7 +11,7 @@ from datadog_api_client.v2.model.logs_aggregation_function import LogsAggregatio
 from datetime import datetime
 from jinja2 import Template
 
-from utils.json_helpers import get_json_config
+from utils.json_helpers import load_json_from_file
 from utils.query import get_dd_config, get_simple_aggregate
 
 def get_env_data(dd_config: Configuration, queries: dict) -> dict:
@@ -37,7 +37,7 @@ def write_report(compiled_data: dict) -> str:
     return output_path
 
 def create_report():
-    json_config = get_json_config('config/queries.json')
+    json_config = load_json_from_file('config/queries.json')
     env_data = {}
 
     for env in json_config.keys():

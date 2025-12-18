@@ -44,7 +44,7 @@ def build_pod_log_report(logs: list, filepath: str):
 
 def main():
     load_dotenv()
-    config = json_helpers.get_json_config('config/queries.json')["ulp"]
+    config = json_helpers.load_json_from_file('config/queries.json')["ulp"]
     dd_config = get_dd_config(config) 
     
     time_to = datetime.now()

@@ -2,6 +2,10 @@ import os
 import json
 from datetime import datetime, timedelta
 from datadog_api_client import ApiClient, Configuration
+
+from datadog_api_client.v1 import Configuration as V1Configuration
+from datadog_api_client.v1.api.metrics_api import MetricsApi as V1MetricsApi
+
 from datadog_api_client.v2.api.logs_api import LogsApi
 from datadog_api_client.v2.model.logs_aggregate_request import LogsAggregateRequest
 from datadog_api_client.v2.model.logs_query_filter import LogsQueryFilter
@@ -10,8 +14,17 @@ from datadog_api_client.v2.model.logs_aggregation_function import LogsAggregatio
 from datadog_api_client.v2.model.logs_list_request import LogsListRequest
 from datadog_api_client.v2.model.logs_list_request_page import LogsListRequestPage
 from datadog_api_client.v2.model.logs_sort import LogsSort
+from datadog_api_client.v2.api.metrics_api import MetricsApi
+from datadog_api_client.v2.model.timeseries_formula_query_request import TimeseriesFormulaQueryRequest
+from datadog_api_client.v2.model.timeseries_formula_request import TimeseriesFormulaRequest
+from datadog_api_client.v2.model.timeseries_formula_request_attributes import TimeseriesFormulaRequestAttributes
+from datadog_api_client.v2.model.timeseries_formula_request_queries import TimeseriesFormulaRequestQueries
+from datadog_api_client.v2.model.timeseries_query import TimeseriesQuery
+from datadog_api_client.v2.model.timeseries_formula_request_type import TimeseriesFormulaRequestType
 
-from utils import json_helpers
+
+from utils.time_utils import iso_to_unix_seconds
+from utils.json_helpers import write_json_to_file
 
 def get_dd_config(env_config: dict) -> Configuration:
     ddconfig = Configuration()
@@ -24,6 +37,18 @@ def get_dd_config(env_config: dict) -> Configuration:
     ddconfig.api_key["appKeyAuth"] = os.getenv(env_config["APP_KEY"])
 
     return ddconfig
+
+def get_v1_dd_config(env_config: dict) -> V1Configuration:
+    v1_ddconfig = V1Configuration()
+    v1_ddconfig.server_variables["site"] = env_config["DD_URL"]
+
+    if not os.getenv(env_config["API_KEY"]) or not os.getenv(env_config["APP_KEY"]):
+        raise KeyError("API_KEY and APP_KEY must be defined in the environment configuration.")
+    
+    v1_ddconfig.api_key["apiKeyAuth"] = os.getenv(env_config["API_KEY"])
+    v1_ddconfig.api_key["appKeyAuth"] = os.getenv(env_config["APP_KEY"])
+
+    return v1_ddconfig
 
 def query_logs(dd_config: Configuration, query_string: str, time_from: str, time_to: str) -> list[dict]:
     with ApiClient(dd_config) as api_client:
@@ -55,7 +80,46 @@ def query_logs(dd_config: Configuration, query_string: str, time_from: str, time
         
     return all_logs
 
+def query_metric(dd_config: V1Configuration, query_string: str, time_from: str, time_to: str) -> list[dict]:
+    with ApiClient(dd_config) as api_client:
+        api_instance = V1MetricsApi(api_client)
+
+        response = api_instance.query_metrics(
+            _from=iso_to_unix_seconds(time_from),
+            to=iso_to_unix_seconds(time_to),
+            query=query_string
+        )
+
+        timeseries = []
+        for series in response.series:
+            timeseries.append(series.to_dict())
+        
+        return timeseries
+
+def query_metric_timeseries(dd_config: V1Configuration, query_string: str, time_from: str, time_to: str) -> dict:
+    print(query_string)
+    with ApiClient(dd_config) as api_client:
+        api_instance = MetricsApi(api_client)
+
+        query_body = TimeseriesFormulaQueryRequest(
+            data = TimeseriesFormulaRequest(
+                attributes=TimeseriesFormulaRequestAttributes(
+                    _from=iso_to_unix_seconds(time_from),
+                    to=iso_to_unix_seconds(time_to),
+                    queries=TimeseriesFormulaRequestQueries([TimeseriesQuery(query=query_string)]),
+                ),
+                type=TimeseriesFormulaRequestType.TIMESERIES_REQUEST
+            ),
+        )
+
+        write_json_to_file(query_body.to_dict(), "output/query_body.json")
+
+        response = api_instance.query_timeseries_data(query_body)
+        
+        return response
+
 def query_aggregate_count(dd_config: Configuration, query_string: str, time_from: str, time_to: str) -> int:
+
     with ApiClient(dd_config) as api_client:
         api_instance = LogsApi(api_client)
 
