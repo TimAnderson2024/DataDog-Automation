@@ -8,7 +8,7 @@ from utils.time_utils import time_range_iso_hours_ago
 from utils.query import *
 from utils.json_helpers import write_json_to_file
 
-TEST_QUERY = "avg:kubernetes.cpu.usage.total{pod_name:ulp-backend-5d8dc6cb8f-r5kvh},avg:kubernetes.cpu.limits{pod_name:ulp-backend-5d8dc6cb8f-r5kvh}"
+TEST_QUERY = "avg:kubernetes.cpu.usage.total{pod_name:ulp-backend-admin-7bc759c948-dwbb6},avg:kubernetes.cpu.limits{pod_name:ulp-backend-admin-7bc759c948-dwbb6}"
 
 def fig_test():
     los_config = json_helpers.load_json_from_file('config/queries.json')["los"]
@@ -55,7 +55,7 @@ def main():
     avg_cpu_sum = 0
     core_sum = 0
     for data_point in metric_data[0]['pointlist']:
-        print(int(data_point[1]) * 10e-9)
+        print(int(data_point[1]) * 10e-10)
         avg_cpu_sum += int(data_point[1]) * 10e-10
 
     for data_point in metric_data[1]['pointlist']:
@@ -64,7 +64,7 @@ def main():
     avg_cpu = (avg_cpu_sum / len(metric_data[0]['pointlist'])) 
     core_avg = core_sum / len(metric_data[1]['pointlist'])
     avg_utilization = (avg_cpu / core_avg) * 100
-    print(f"Average CPU: {avg_cpu}, Average Cores: {core_avg}, Average Utilization: {avg_utilization}%")
+    print(f"Average CPU: {round(avg_cpu, 2)}, Average Cores: {round(core_avg, 2)}, Average Utilization: {round(avg_utilization, 2)}%")
 
 if __name__ == "__main__":
     main()
