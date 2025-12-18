@@ -9,25 +9,9 @@ from utils import json_helpers
 pio.renderers.default = "browser"
 
 
-def generate_heatmap():
+def generate_heatmap(current, historical_avg, pct_diff):
     config = json_helpers.load_json_from_file('config/figures.json')
-    print(config)
-
-    current = np.array([
-        [7, 7, 1],
-        [1, 1, 1],
-        [19, 28, 8]
-    ])
-
-    historical_avg = np.array([
-        [2, 2, 1],
-        [1, 1, 1],
-        [5, 5, 1],
-    ])
-
-    # Percent difference
-    pct_diff = (current - historical_avg) / historical_avg * 100
-
+    
     # Text annotation (two lines)
     text = [
         [

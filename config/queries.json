@@ -4,9 +4,9 @@
         "API_KEY": "DD_ULP_API_KEY",
         "APP_KEY": "DD_ULP_APP_KEY",
         "queries": {
-            "ulp_504": "env:ulp-prod status:error @http.status_code:504 service:elb",
-            "ulp_502": "env:ulp-prod status:error @http.status_code:502 service:elb",
-            "ulp_oom": "env:ulp-prod status:error (OutOfMemoryError OR \"out of memory\" OR OOM)",
+            "504": "env:ulp-prod status:error @http.status_code:504 service:elb",
+            "502": "env:ulp-prod status:error @http.status_code:502 service:elb",
+            "oom": "env:ulp-prod status:error (OutOfMemoryError OR \"out of memory\" OR OOM)",
             "filemover_failed": "kube_namespace:*ktrs run_job.sh result for job failed env:(cls-prod OR ulp-prod) pod_name:*",
             "osc_synthetic": "@test.id:bsi-2qz-vvt @result.status:failed "
         }
@@ -16,9 +16,9 @@
         "API_KEY": "DD_ULP_API_KEY",
         "APP_KEY": "DD_ULP_APP_KEY",
         "queries": {
-            "cls_504": "env:cls-prod status:error @http.status_code:504 service:elb",
-            "cls_502": "env:cls-prod status:error @http.status_code:502 service:elb",
-            "cls_oom": "env:cls-prod status:error (OutOfMemoryError OR \"out of memory\" OR OOM)"
+            "504": "env:cls-prod status:error @http.status_code:504 service:elb",
+            "502": "env:cls-prod status:error @http.status_code:502 service:elb",
+            "oom": "env:cls-prod status:error (OutOfMemoryError OR \"out of memory\" OR OOM)"
         }
     },
     "los": {
@@ -26,8 +26,11 @@
         "API_KEY": "DD_LOS_API_KEY",
         "APP_KEY": "DD_LOS_APP_KEY",
         "queries": {
-            "los_504": "env:prod status:error @http.status_code:504",
-            "los_502": "env:prod status:error @http.status_code:502"
+            "504": "env:prod status:error @http.status_code:504",
+            "502": "env:prod status:error @http.status_code:502",
+            "oom": "env:prod status:error (OutOfMemoryError OR \"out of memory\" OR OOM)"
         }
     }
 }
+
+{'ulp': {'24h': {'504': 184, '502': 2, 'oom': 0, 'filemover_failed': 1, 'osc_synthetic': 0}, '2week_avg': {'504': 50, '502': 4, 'oom': 0, 'filemover_failed': 0, 'osc_synthetic': 0}}, 'cls': {'24h': {'504': 0, '502': 0, 'oom': 0}, '2week_avg': {'504': 1, '502': 1, 'oom': 0}}, 'los': {'24h': {'504': 0, '502': 0, 'oom': 0}, '2week_avg': {'504': 2, '502': 8, 'oom': 0}}}

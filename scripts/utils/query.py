@@ -14,17 +14,8 @@ from datadog_api_client.v2.model.logs_aggregation_function import LogsAggregatio
 from datadog_api_client.v2.model.logs_list_request import LogsListRequest
 from datadog_api_client.v2.model.logs_list_request_page import LogsListRequestPage
 from datadog_api_client.v2.model.logs_sort import LogsSort
-from datadog_api_client.v2.api.metrics_api import MetricsApi
-from datadog_api_client.v2.model.timeseries_formula_query_request import TimeseriesFormulaQueryRequest
-from datadog_api_client.v2.model.timeseries_formula_request import TimeseriesFormulaRequest
-from datadog_api_client.v2.model.timeseries_formula_request_attributes import TimeseriesFormulaRequestAttributes
-from datadog_api_client.v2.model.timeseries_formula_request_queries import TimeseriesFormulaRequestQueries
-from datadog_api_client.v2.model.timeseries_query import TimeseriesQuery
-from datadog_api_client.v2.model.timeseries_formula_request_type import TimeseriesFormulaRequestType
-
 
 from utils.time_utils import iso_to_unix_seconds
-from utils.json_helpers import write_json_to_file
 
 def get_dd_config(env_config: dict) -> Configuration:
     ddconfig = Configuration()
@@ -95,28 +86,6 @@ def query_metric(dd_config: V1Configuration, query_string: str, time_from: str, 
             timeseries.append(series.to_dict())
         
         return timeseries
-
-def query_metric_timeseries(dd_config: V1Configuration, query_string: str, time_from: str, time_to: str) -> dict:
-    print(query_string)
-    with ApiClient(dd_config) as api_client:
-        api_instance = MetricsApi(api_client)
-
-        query_body = TimeseriesFormulaQueryRequest(
-            data = TimeseriesFormulaRequest(
-                attributes=TimeseriesFormulaRequestAttributes(
-                    _from=iso_to_unix_seconds(time_from),
-                    to=iso_to_unix_seconds(time_to),
-                    queries=TimeseriesFormulaRequestQueries([TimeseriesQuery(query=query_string)]),
-                ),
-                type=TimeseriesFormulaRequestType.TIMESERIES_REQUEST
-            ),
-        )
-
-        write_json_to_file(query_body.to_dict(), "output/query_body.json")
-
-        response = api_instance.query_timeseries_data(query_body)
-        
-        return response
 
 def query_aggregate_count(dd_config: Configuration, query_string: str, time_from: str, time_to: str) -> int:
 

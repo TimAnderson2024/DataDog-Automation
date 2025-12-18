@@ -2,6 +2,7 @@
 
 import os
 from dotenv import load_dotenv
+from requests import get
 
 from utils import json_helpers
 from utils.time_utils import time_range_iso_hours_ago
@@ -41,16 +42,11 @@ def log_test():
 
     query_logs(dd_config, "pod_name:ulp-backend-58c9bb59c7-6l2qm", time_from, time_to)
 
-
-def main():
-    load_dotenv()
+def metric_test():
     config = json_helpers.load_json_from_file('config/queries.json')["ulp"]
-    dd_config = get_v1_dd_config(config)
+    dd_config = get_dd_config(config)
     time_range = time_range_iso_hours_ago(1)
-
     metric_data = query_metric(dd_config, TEST_QUERY, time_range[0], time_range[1])
-    print(len(metric_data))
-    write_json_to_file(metric_data, "output/test_metric_data.json")
 
     avg_cpu_sum = 0
     core_sum = 0
@@ -64,7 +60,17 @@ def main():
     avg_cpu = (avg_cpu_sum / len(metric_data[0]['pointlist'])) 
     core_avg = core_sum / len(metric_data[1]['pointlist'])
     avg_utilization = (avg_cpu / core_avg) * 100
+
+    write_json_to_file(metric_data, "output/test_metric_data.json")
     print(f"Average CPU: {round(avg_cpu, 2)}, Average Cores: {round(core_avg, 2)}, Average Utilization: {round(avg_utilization, 2)}%")
+
+
+def main():
+    load_dotenv()
+    config = json_helpers.load_json_from_file('config/queries.json')["ulp"]
+    dd_config = get_dd_config(config)
+    time_range = time_range_iso_hours_ago(1)
+
 
 if __name__ == "__main__":
     main()
