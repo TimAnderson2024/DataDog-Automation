@@ -22,6 +22,7 @@ def get_env_data(dd_config: Configuration, queries: dict) -> dict:
     return env_data
 
 def write_report(compiled_data: dict) -> str:
+    print(compiled_data)
     with open('templates/report_template.md') as f:
         template = Template(f.read())
 
@@ -44,7 +45,8 @@ def create_report():
         env_config, env_queries = json_config[env], json_config[env]["queries"]
         try:
             dd_config = get_dd_config(env_config)
-            env_data = env_data | get_env_data(dd_config, env_queries)
+            env_data[env] =get_env_data(dd_config, env_queries)
+            print(f"Generating report data for {env}... {env_data}")
         except KeyError:
             print(f"Skipping {env} due to missing API keys.")
 

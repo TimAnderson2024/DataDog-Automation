@@ -32,5 +32,3 @@
         }
     }
 }
-
-{'ulp': {'24h': {'504': 184, '502': 2, 'oom': 0, 'filemover_failed': 1, 'osc_synthetic': 0}, '2week_avg': {'504': 50, '502': 4, 'oom': 0, 'filemover_failed': 0, 'osc_synthetic': 0}}, 'cls': {'24h': {'504': 0, '502': 0, 'oom': 0}, '2week_avg': {'504': 1, '502': 1, 'oom': 0}}, 'los': {'24h': {'504': 0, '502': 0, 'oom': 0}, '2week_avg': {'504': 2, '502': 8, 'oom': 0}}}
