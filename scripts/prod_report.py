@@ -11,8 +11,9 @@ from datadog_api_client.v2.model.logs_compute import LogsCompute
 from datadog_api_client.v2.model.logs_aggregation_function import LogsAggregationFunction
 from jinja2 import Template
 
+from utils.time_utils import time_range_iso_hours_ago, iso_to_unix_milliseconds
 from utils.json_helpers import load_json_from_file
-from utils.query import get_dd_config, get_simple_aggregate
+from utils.query import get_dd_config, get_simple_aggregate, query_synthetic_test
 
 def get_env_data(dd_config: Configuration, queries: dict, timeframe: str) -> dict:
     env_data = {}
@@ -42,6 +43,13 @@ def write_report(compiled_data: dict, timeframe: str) -> str:
     
     return output_path
 
+def get_synthetics(dd_config: Configuration):
+    time_from, time_to = time_range_iso_hours_ago(24)
+    time_from = iso_to_unix_milliseconds(time_from)
+    time_to = iso_to_unix_milliseconds(time_to)
+
+    print(query_synthetic_test(dd_config, "bsi-2qz-vvt", time_from, time_to))
+
 def create_report():
     json_config = load_json_from_file('config/queries.json')
     env_data = {}
@@ -53,9 +61,12 @@ def create_report():
   
     for env in json_config.keys():
         env_config, env_queries = json_config[env], json_config[env]["queries"]
+
         try:
             dd_config = get_dd_config(env_config)
             env_data[env] = get_env_data(dd_config, env_queries, timeframe)
+            if env == "ulp":
+                get_synthetics(dd_config)
             print(f"Generating report data for {env}... {env_data}")
         except KeyError:
             print(f"Skipping {env} due to missing API keys.")

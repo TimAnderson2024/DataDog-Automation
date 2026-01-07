@@ -5,6 +5,7 @@ from datadog_api_client import ApiClient, Configuration
 
 from datadog_api_client.v1 import Configuration as V1Configuration
 from datadog_api_client.v1.api.metrics_api import MetricsApi as V1MetricsApi
+from datadog_api_client.v1.api.synthetics_api import SyntheticsApi
 
 from datadog_api_client.v2.api.logs_api import LogsApi
 from datadog_api_client.v2.model.logs_aggregate_request import LogsAggregateRequest
@@ -86,6 +87,13 @@ def query_metric(dd_config: V1Configuration, query_string: str, time_from: str, 
             timeseries.append(series.to_dict())
         
         return timeseries
+    
+def query_synthetic_test(dd_config: Configuration, test_id: str, time_from: str, time_to: str) -> dict:
+    with ApiClient(dd_config) as api_client:
+        api_instance = SyntheticsApi(api_client)
+
+        return api_instance.get_api_test_latest_results(public_id=test_id)
+
 
 def query_aggregate_count(dd_config: Configuration, query_string: str, time_from: str, time_to: str) -> int:
 
