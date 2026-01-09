@@ -5,7 +5,7 @@ from datadog_api_client import ApiClient, Configuration
 
 from datadog_api_client.v1 import Configuration as V1Configuration
 from datadog_api_client.v1.api.metrics_api import MetricsApi as V1MetricsApi
-from datadog_api_client.v1.api.synthetics_api import SyntheticsApi
+from datadog_api_client.v1.api.synthetics_api import SyntheticsApi, SyntheticsFetchUptimesPayload
 
 from datadog_api_client.v2.api.logs_api import LogsApi
 from datadog_api_client.v2.model.logs_aggregate_request import LogsAggregateRequest
@@ -96,6 +96,19 @@ def query_synthetic_test(dd_config: Configuration, test_id: str, time_from: str,
         synthetic_test_results = api_instance.get_api_test_latest_results(public_id=test_id, from_ts=time_from, to_ts=time_to).to_dict()
 
         return synthetic_test_results
+    
+def query_synthetic_uptime(dd_config: Configuration, test_id: str, time_from: str, time_to: str) -> dict:
+    with ApiClient(dd_config) as api_client:
+        api_instance = SyntheticsApi(api_client)
+
+        query_body = SyntheticsFetchUptimesPayload(
+            from_ts = time_from,
+            public_ids = [test_id],
+            to_ts = time_to
+        )
+
+        synthetic_test_coverage = api_instance.fetch_uptimes(query_body)[0].to_dict()
+        return synthetic_test_coverage
 
 def query_aggregate_count(dd_config: Configuration, query_string: str, time_from: str, time_to: str) -> int:
 
