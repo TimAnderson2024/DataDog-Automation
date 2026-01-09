@@ -9,6 +9,9 @@
             "oom": "env:ulp-prod status:error (OutOfMemoryError OR \"out of memory\" OR OOM)",
             "filemover_failed": "kube_namespace:*ktrs run_job.sh result for job failed env:(cls-prod OR ulp-prod) pod_name:*",
             "osc_synthetic": "@test.id:bsi-2qz-vvt @result.status:failed "
+        },
+        "synthetic_tests": {
+            "allocore": "bsi-2qz-vvt"
         }
     },
     "cls": {
@@ -29,6 +32,14 @@
             "504": "env:prod status:error @http.status_code:504",
             "502": "env:prod status:error @http.status_code:502",
             "oom": "env:prod status:error (OutOfMemoryError OR \"out of memory\" OR OOM)"
+        }
+    },
+    "stg-core": {
+        "DD_URL": "datadoghq.com",
+        "API_KEY": "DD_CORE_API_KEY",
+        "APP_KEY": "DD_CORE_APP_KEY",
+        "synthetic_tests": {
+            "urifinvest": "jrd-tg4-3gt"
         }
     }
 }

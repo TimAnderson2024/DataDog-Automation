@@ -15,15 +15,51 @@ from datetime import datetime, timezone, date
 
 import utils.time_utils as time
 from utils.json_helpers import load_json_from_file
+import utils.query as query
 from utils.query import get_dd_config, get_simple_aggregate, query_synthetic_test, query_synthetic_uptime
 
-def get_env_data(dd_config: Configuration, queries: dict, timeframe: str) -> dict:
+def get_env_data(dd_config: Configuration, queries: dict, synthetics: dict, timeframe: str) -> dict:
     env_data = {}
 
-    for metric, query in queries.items():
-        env_data[metric] = get_simple_aggregate(dd_config, query, timeframe)
+    if queries is not None:
+        for metric, query in queries.items():
+            print(f"\tRunning query for {metric}")
+            env_data[metric] = get_simple_aggregate(dd_config, query, timeframe)
+        print("Query data gathered \n")
+
+    print("Checking synthetic tests...")
+    if synthetics is not None: 
+        for endpoint, synthetic_id in synthetics.items():
+            print(f"Fetching synthetic test results for {endpoint}...")
+            if get_synthetic_results(dd_config, synthetic_id):
+                env_data[endpoint] = "No failures"
+            else:
+                env_data[endpoint] = "Failure detected!"
+    else:
+        print(f"No synthetics found, skipping synetic checks...")
 
     return env_data
+
+
+def get_synthetic_results(dd_config: Configuration, test_id: str):
+    time_from, time_to = time.time_range_iso_hours_ago(24)
+
+    with open('output/synthetic_output.json', 'w') as f:
+        synthetic_results = query_synthetic_test(dd_config, test_id, time.iso_to_unix_milliseconds(time_from), time.iso_to_unix_milliseconds(time_to))
+        json_synthetic = json.dumps(synthetic_results, indent=4)
+        f.write(json_synthetic)
+
+        failures = 0
+        print("Checking synthetic test results...")
+        for test_result in synthetic_results:
+            if not test_result["result"]["passed"]:
+                print(f"SYNTHETIC FAILURE DETECTED:\n{test_result}")
+                failures += 1
+
+        if failures == 0:
+            print(f"No synthetic test failures detected")
+            
+        return failures == 0
 
 def write_report(compiled_data: dict, timeframe: str) -> str:
     print(compiled_data)
@@ -45,24 +81,6 @@ def write_report(compiled_data: dict, timeframe: str) -> str:
     
     return output_path
 
-def get_synthetics(dd_config: Configuration, test_id: str):
-    time_from, time_to = time.time_range_iso_hours_ago(24)
-    print(time_from, time_to)
-
-    with open('output/synthetic_output.json', 'w') as f:
-        synthetic_results = query_synthetic_test(dd_config, test_id, time.iso_to_unix_milliseconds(time_from), time.iso_to_unix_milliseconds(time_to))
-        json_synthetic = json.dumps(synthetic_results, indent=4)
-        # f.write(json_synthetic)
-
-        # print("from_ts:", time_from, datetime.fromtimestamp(time_from, tz=timezone.utc))
-        # print("to_ts:", time_to, datetime.fromtimestamp(time_to, tz=timezone.utc))
-        # print("duration:", time_to - time_from)
-
-        synthetic_uptime = query_synthetic_uptime(dd_config, test_id, time.iso_to_unix_seconds(time_from), time.iso_to_unix_seconds(time_to))
-        json_uptime = json.dumps(synthetic_uptime, indent=4)
-        f.write("UPTIME METRICS:\n")
-        f.write(json_uptime)
-
 def create_report():
     json_config = load_json_from_file('config/queries.json')
     env_data = {}
@@ -73,16 +91,18 @@ def create_report():
         timeframe = "now-24h"
   
     for env in json_config.keys():
-        env_config, env_queries = json_config[env], json_config[env]["queries"]
+        env_config= json_config[env]
+        env_queries = json_config[env].get("queries")
+        env_synthetics = json_config[env].get("synthetic_tests")
 
         try:
             dd_config = get_dd_config(env_config)
-            env_data[env] = get_env_data(dd_config, env_queries, timeframe)
-            if env == "ulp":
-                get_synthetics(dd_config, "bsi-2qz-vvt")
-            print(f"Generating report data for {env}... {env_data}")
+            print(f"Gathering report data for {env} environment")
+            env_data[env] = get_env_data(dd_config, env_queries, env_synthetics, timeframe)
+            print(f"Report data for {env} environment fetched successfully\n")
+                
         except KeyError:
-            print(f"Skipping {env} due to missing API keys.")
+          print(f"Skipping {env} due to missing API keys.")
 
     out_path = write_report(env_data, timeframe)
     print(f"View report: \n{out_path}")

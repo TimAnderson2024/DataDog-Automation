@@ -14,7 +14,9 @@
 - 502: {{ data.los['502'] }}
 
 ## OSC Account
-- Synthetic Test Failures: {{ data.ulp['osc_synthetic'] }}
+- Synthetic Test Failures: 
+    - core.allocore.com: {{ data.ulp["allocore"] }}
+    - urifinvest.com: {{ data["stg-core"]["urifinvest"]}}
 - Sentry:
     - Failed Backend Rates: {{ data.osc_failed_backend }}
     - Unusual P95 scores: {{ data.osc_p95 }}

@@ -16,7 +16,9 @@ from datadog_api_client.v2.model.logs_list_request import LogsListRequest
 from datadog_api_client.v2.model.logs_list_request_page import LogsListRequestPage
 from datadog_api_client.v2.model.logs_sort import LogsSort
 
+import utils.time_utils as time
 from utils.time_utils import iso_to_unix_seconds
+
 
 def get_dd_config(env_config: dict) -> Configuration:
     ddconfig = Configuration()
@@ -88,13 +90,22 @@ def query_metric(dd_config: V1Configuration, query_string: str, time_from: str, 
         
         return timeseries
 
-# Get the last 150 results for a certain synthetic test
-# Provide time_from and time_to as ISO formatted strings with millisecond precision
 def query_synthetic_test(dd_config: Configuration, test_id: str, time_from: str, time_to: str) -> dict:
     with ApiClient(dd_config) as api_client:
         api_instance = SyntheticsApi(api_client)
-        synthetic_test_results = api_instance.get_api_test_latest_results(public_id=test_id, from_ts=time_from, to_ts=time_to).to_dict()
 
+        # Paginate results using last_timestamp_fetched (API output cuts off at 150 results)
+        synthetic_test_results = []
+        print(f"Fetching synthetic results from {time.unix_to_iso(time_from)} to {time.unix_to_iso(time_to)}:")
+        while time_to > time_from:
+            query_response = api_instance.get_api_test_latest_results(public_id=test_id, from_ts=time_from, to_ts=time_to).to_dict()
+            results = query_response["results"]
+
+            print(f"\tFetched {len(results)} results from {time.unix_to_iso(results[-1]['check_time'])} to {time.unix_to_iso(results[0]['check_time'])}")
+            time_to = query_response["last_timestamp_fetched"]
+            synthetic_test_results += query_response["results"]
+
+        print(f"Fetched {len(synthetic_test_results)} results from {time.unix_to_iso(results[0]['check_time'])} to {time.unix_to_iso(results[-1]['check_time'])}")
         return synthetic_test_results
     
 def query_synthetic_uptime(dd_config: Configuration, test_id: str, time_from: str, time_to: str) -> dict:
