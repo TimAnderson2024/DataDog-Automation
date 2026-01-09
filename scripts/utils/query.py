@@ -87,13 +87,15 @@ def query_metric(dd_config: V1Configuration, query_string: str, time_from: str, 
             timeseries.append(series.to_dict())
         
         return timeseries
-    
+
+# Get the last 150 results for a certain synthetic test
+# Provide time_from and time_to as ISO formatted strings with millisecond precision
 def query_synthetic_test(dd_config: Configuration, test_id: str, time_from: str, time_to: str) -> dict:
     with ApiClient(dd_config) as api_client:
         api_instance = SyntheticsApi(api_client)
+        synthetic_test_results = api_instance.get_api_test_latest_results(public_id=test_id, from_ts=time_from, to_ts=time_to).to_dict()
 
-        return api_instance.get_api_test_latest_results(public_id=test_id)
-
+        return synthetic_test_results
 
 def query_aggregate_count(dd_config: Configuration, query_string: str, time_from: str, time_to: str) -> int:
 

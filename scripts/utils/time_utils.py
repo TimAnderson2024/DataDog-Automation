@@ -18,5 +18,5 @@ def time_range_iso_hours_ago(hours_ago: int) -> str:
     Get the ISO 8601 formatted time string for a time 'hours_ago' hours before now.
     """
     time_to = datetime.now()
-    time_from = time_to - timedelta(hours_ago)
+    time_from = time_to - timedelta(hours=hours_ago)
     return time_from.isoformat(), time_to.isoformat()

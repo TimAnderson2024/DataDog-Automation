@@ -2,6 +2,7 @@
 
 import os
 import datetime
+import json
 from dotenv import load_dotenv
 from datadog_api_client import ApiClient, Configuration
 from datadog_api_client.v2.api.logs_api import LogsApi
@@ -47,8 +48,12 @@ def get_synthetics(dd_config: Configuration):
     time_from, time_to = time_range_iso_hours_ago(24)
     time_from = iso_to_unix_milliseconds(time_from)
     time_to = iso_to_unix_milliseconds(time_to)
+    print(time_from, time_to)
 
-    print(query_synthetic_test(dd_config, "bsi-2qz-vvt", time_from, time_to))
+    with open('output/synthetic_output.json', 'w') as f:
+        synthetic_results = query_synthetic_test(dd_config, "bsi-2qz-vvt", time_from, time_to)
+        json_synthetic = json.dumps(synthetic_results, indent=4)
+        f.write(json_synthetic)
 
 def create_report():
     json_config = load_json_from_file('config/queries.json')
