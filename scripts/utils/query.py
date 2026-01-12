@@ -122,7 +122,6 @@ def query_synthetic_uptime(dd_config: Configuration, test_id: str, time_from: st
         return synthetic_test_coverage
 
 def query_aggregate_count(dd_config: Configuration, query_string: str, time_from: str, time_to: str) -> int:
-
     with ApiClient(dd_config) as api_client:
         api_instance = LogsApi(api_client)
 
@@ -130,7 +129,7 @@ def query_aggregate_count(dd_config: Configuration, query_string: str, time_from
             body=LogsAggregateRequest(
                 filter=LogsQueryFilter(
                     query=query_string,
-                    _from=str(time_from),
+                    _from=f"{time_to}-{time_from}h",
                     to=time_to 
                 ),
                 compute=[
