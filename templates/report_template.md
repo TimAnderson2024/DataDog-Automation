@@ -7,8 +7,11 @@
     - 504: {{ data.cls['504'] }}
     - 502: {{ data.cls['502'] }}
     - OOM: {{ data.cls['oom'] }}
-- **FileMover Failed Jobs:** {{ data.ulp['filemover_failed'] }}
-
+- **FileMover Failed Jobs:** {{ data.ulp['fm_failures']['num_total_failures'] }} total failures, {{ data.ulp['fm_failures']['num_distinct_failures'] }} distinct failures
+{%- for name, failure in data.ulp['fm_failures']['jobs'].items() %}
+    - {{ name }}: {{ failure["count"] }}
+{%- endfor %}
+    
 ## LOS Account
 - 504: {{ data.los['504'] }}
 - 502: {{ data.los['502'] }}

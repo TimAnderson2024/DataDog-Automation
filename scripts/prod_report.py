@@ -3,6 +3,7 @@
 import os
 import datetime
 import json
+from pprint import pprint
 from dotenv import load_dotenv
 from datadog_api_client import ApiClient, Configuration
 from datadog_api_client.v2.api.logs_api import LogsApi
@@ -15,20 +16,21 @@ from datetime import datetime, timezone, date
 
 import utils.time_utils as time
 from utils.json_helpers import load_json_from_file
-import utils.query as query
+import utils.query as q
 from utils.query import get_dd_config, get_simple_aggregate, query_synthetic_test, query_synthetic_uptime
 
-def get_env_data(dd_config: Configuration, queries: dict, synthetics: dict, num_hours: int) -> dict:
+def get_env_data(dd_config: Configuration, queries: dict, synthetics: dict, fm: dict, num_hours: int) -> dict:
     env_data = {}
 
     if queries is not None:
         for metric, query in queries.items():
             print(f"\tRunning query for {metric}")
             env_data[metric] = get_simple_aggregate(dd_config, query, num_hours)
-        print("Query data gathered \n")
+        print("Query data gathered")
 
-    print("Checking synthetic tests...")
     if synthetics is not None: 
+        print("Checking synthetic tests...")
+
         for endpoint, synthetic_id in synthetics.items():
             print(f"Fetching synthetic test results for {endpoint}...")
             if get_synthetic_results(dd_config, synthetic_id, num_hours):
@@ -36,10 +38,24 @@ def get_env_data(dd_config: Configuration, queries: dict, synthetics: dict, num_
             else:
                 env_data[endpoint] = "Failure detected!"
     else:
-        print(f"No synthetics found, skipping synetic checks...")
+        print(f"No synthetics found, skipping synthetic checks...")
+    
+    if fm is not None:
+        print("Checking for failed FM jobs...")
+        fm_results = get_fm_results(dd_config, fm, num_hours)
+        env_data["fm_failures"] = fm_results
+
+        if env_data["fm_failures"]["num_distinct_failures"] > 0:
+            print("Found failed fm jobs:")
+            
+            for job in env_data["fm_failures"]["jobs"].items():
+                print(f"\t {job}")
+    else:
+        print(f"No FM queries found, skipping FM checks...")
+
+
 
     return env_data
-
 
 def get_synthetic_results(dd_config: Configuration, test_id: str, num_hours:int):
     time_from, time_to = time.time_range_iso_hours_ago(num_hours)
@@ -61,8 +77,28 @@ def get_synthetic_results(dd_config: Configuration, test_id: str, num_hours:int)
             
         return failures == 0
 
+def get_fm_results(dd_config: Configuration, queries: dict, num_hours: int):
+    data = q.query_logs(dd_config, queries["get_all_failed"], f"now-{num_hours}h", "now", False)
+    failed_jobs = {"jobs": dict(), "num_distinct_failures": 0, "num_total_failures": 0}
+
+    # Strip query data
+    for job in data:
+        service = job["attributes"]["service"]
+        name = job["attributes"]["attributes"]["fm_job"]["name"]
+        timestamp = job["attributes"]["timestamp"]
+
+        if not failed_jobs.get("jobs").get(name, None):
+            failed_jobs["jobs"][name] = {"count": 1, "service": service, "timestamp": timestamp}
+        else:
+            failed_jobs["jobs"][name]["count"] = failed_jobs["jobs"][name]["count"] + 1
+            failed_jobs["jobs"][name]["timestamp"] = max(timestamp, failed_jobs["jobs"][name]["timestamp"])
+    failed_jobs["num_distinct_failures"] = len(failed_jobs["jobs"].items()) 
+    failed_jobs["num_total_failures"] = len(data)
+
+    return failed_jobs
+
+
 def write_report(compiled_data: dict, num_hours: int) -> str:
-    print(compiled_data)
     with open('templates/report_template.md') as f:
         template = Template(f.read())
 
@@ -95,16 +131,14 @@ def create_report():
         env_config= json_config[env]
         env_queries = json_config[env].get("queries")
         env_synthetics = json_config[env].get("synthetic_tests")
+        env_fm = json_config[env].get("filemover")
 
-        try:
-            dd_config = get_dd_config(env_config)
-            print(f"Gathering report data for {env} environment")
-            env_data[env] = get_env_data(dd_config, env_queries, env_synthetics, num_hours)
-            print(f"Report data for {env} environment fetched successfully\n")
-                
-        except KeyError:
-          print(f"Skipping {env} due to missing API keys.")
-
+        dd_config = get_dd_config(env_config)
+        print(f"Gathering report data for {env} environment")
+        env_data[env] = get_env_data(dd_config, env_queries, env_synthetics, env_fm, num_hours)
+        print(f"Report data for {env} environment fetched successfully\n")
+            
+    pprint(env_data)
     out_path = write_report(env_data, num_hours)
     print(f"View report: \n{out_path}")
 

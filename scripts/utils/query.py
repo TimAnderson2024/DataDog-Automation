@@ -44,7 +44,7 @@ def get_v1_dd_config(env_config: dict) -> V1Configuration:
 
     return v1_ddconfig
 
-def query_logs(dd_config: Configuration, query_string: str, time_from: str, time_to: str) -> list[dict]:
+def query_logs(dd_config: Configuration, query_string: str, time_from: str, time_to: str, keep_tags: bool) -> list[dict]:
     with ApiClient(dd_config) as api_client:
         api_instance = LogsApi(api_client)
         query_body = LogsListRequest(
@@ -63,6 +63,12 @@ def query_logs(dd_config: Configuration, query_string: str, time_from: str, time
             response = api_instance.list_logs(body=query_body)
             response_data = response.data
             response_metadata = response.meta.to_dict()
+            
+            # Strip tags
+            if not keep_tags:
+                for entry in response_data:
+                    entry = entry.to_dict()
+                    entry.get("attributes", {}).pop("tags", None)
 
             all_logs.extend(response_data)
             logs_processed += len(response_data)
@@ -75,6 +81,7 @@ def query_logs(dd_config: Configuration, query_string: str, time_from: str, time
     return all_logs
 
 def query_metric(dd_config: V1Configuration, query_string: str, time_from: str, time_to: str) -> list[dict]:
+
     with ApiClient(dd_config) as api_client:
         api_instance = V1MetricsApi(api_client)
 

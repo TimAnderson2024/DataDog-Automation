@@ -6,12 +6,15 @@
         "queries": {
             "504": "env:ulp-prod status:error @http.status_code:504 service:elb",
             "502": "env:ulp-prod status:error @http.status_code:502 service:elb",
-            "oom": "env:ulp-prod status:error (OutOfMemoryError OR \"out of memory\" OR OOM)",
-            "filemover_failed": "kube_namespace:*ktrs run_job.sh result for job failed env:(cls-prod OR ulp-prod) pod_name:*",
-            "osc_synthetic": "@test.id:bsi-2qz-vvt @result.status:failed "
+            "oom": "env:ulp-prod status:error (OutOfMemoryError OR \"out of memory\" OR OOM)"
         },
         "synthetic_tests": {
             "allocore": "bsi-2qz-vvt"
+        },
+        "filemover": {
+            "get_all_failed": "kube_namespace:*ktrs run_job.sh result for job failed env:(ulp-prod OR cls-prod)",
+            "get_specific_success": "kube_namespace:*ktrs result for job success service: {job-name}",
+            "get_specific_failure": "kube_namespace:*ktrs result for job failed service: {job-name}"
         }
     },
     "cls": {
