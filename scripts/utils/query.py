@@ -105,7 +105,7 @@ def query_synthetic_test(dd_config: Configuration, test_id: str, time_from: str,
             time_to = query_response["last_timestamp_fetched"]
             synthetic_test_results += query_response["results"]
 
-        print(f"Fetched {len(synthetic_test_results)} results from {time.unix_to_iso(results[0]['check_time'])} to {time.unix_to_iso(results[-1]['check_time'])}")
+        print(f"Fetched {len(synthetic_test_results)} results from {time.unix_to_iso(synthetic_test_results[0]['check_time'])} to {time.unix_to_iso(synthetic_test_results[-1]['check_time'])}")
         return synthetic_test_results
     
 def query_synthetic_uptime(dd_config: Configuration, test_id: str, time_from: str, time_to: str) -> dict:
@@ -130,7 +130,7 @@ def query_aggregate_count(dd_config: Configuration, query_string: str, time_from
             body=LogsAggregateRequest(
                 filter=LogsQueryFilter(
                     query=query_string,
-                    _from=time_from,
+                    _from=str(time_from),
                     to=time_to 
                 ),
                 compute=[
@@ -145,7 +145,7 @@ def query_aggregate_count(dd_config: Configuration, query_string: str, time_from
             return int(response.data.buckets[0].computes.get('c0', 0))
         return 0
 
-def get_simple_aggregate(dd_config: Configuration, query_string: str, time_from: str) -> int:
+def get_simple_aggregate(dd_config: Configuration, query_string: str, time_from: int) -> int:
     return query_aggregate_count(dd_config, query_string, time_from, "now")
 
 def get_filtered_aggregate(dd_config: Configuration, query_string: str, weeks_back: int, weekday = True, weekend = False) -> int:
