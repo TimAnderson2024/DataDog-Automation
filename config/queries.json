@@ -13,8 +13,7 @@
         },
         "filemover": {
             "get_all_failed": "kube_namespace:*ktrs run_job.sh result for job failed env:(ulp-prod OR cls-prod)",
-            "get_specific_success": "kube_namespace:*ktrs result for job success service: {job-name}",
-            "get_specific_failure": "kube_namespace:*ktrs result for job failed service: {job-name}"
+            "get_success": "kube_namespace:*ktrs result for job success service: {service}"
         }
     },
     "cls": {

@@ -9,8 +9,9 @@
     - OOM: {{ data.cls['oom'] }}
 - **FileMover Failed Jobs:** {{ data.ulp['fm_failures']['num_total_failures'] }} total failures, {{ data.ulp['fm_failures']['num_distinct_failures'] }} distinct failures
 {%- for name, failure in data.ulp['fm_failures']['jobs'].items() %}
-    - {{ name }}: {{ failure["count"] }}
+    - {{ name }}: {{ failure["count"] }}{% if failure["recent_success"] %} failures, but succeeded on most recent attempt{% endif %}
 {%- endfor %}
+
     
 ## LOS Account
 - 504: {{ data.los['504'] }}

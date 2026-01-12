@@ -48,8 +48,11 @@ def get_env_data(dd_config: Configuration, queries: dict, synthetics: dict, fm: 
         if env_data["fm_failures"]["num_distinct_failures"] > 0:
             print("Found failed fm jobs:")
             
-            for job in env_data["fm_failures"]["jobs"].items():
-                print(f"\t {job}")
+            for job_name, job_attributes in env_data["fm_failures"]["jobs"].items():
+                print(f"\t {job_name}")
+                if job_attributes["recent_success"]:
+                    print("\t\tBut succeeded on most recent attempt!")
+
     else:
         print(f"No FM queries found, skipping FM checks...")
 
@@ -79,9 +82,9 @@ def get_synthetic_results(dd_config: Configuration, test_id: str, num_hours:int)
 
 def get_fm_results(dd_config: Configuration, queries: dict, num_hours: int):
     data = q.query_logs(dd_config, queries["get_all_failed"], f"now-{num_hours}h", "now", False)
-    failed_jobs = {"jobs": dict(), "num_distinct_failures": 0, "num_total_failures": 0}
+    failed_jobs = {"jobs": dict(), "num_distinct_failures": 0, "num_total_failures": 0, "recent_success": False}
 
-    # Strip query data
+    # Strip query to build dict
     for job in data:
         service = job["attributes"]["service"]
         name = job["attributes"]["attributes"]["fm_job"]["name"]
@@ -94,6 +97,15 @@ def get_fm_results(dd_config: Configuration, queries: dict, num_hours: int):
             failed_jobs["jobs"][name]["timestamp"] = max(timestamp, failed_jobs["jobs"][name]["timestamp"])
     failed_jobs["num_distinct_failures"] = len(failed_jobs["jobs"].items()) 
     failed_jobs["num_total_failures"] = len(data)
+
+    # Query for newest succeeded job
+    for job_name, job_attributes in failed_jobs["jobs"].items():
+        print(job_name)
+        success_query = queries["get_success"].format(service=job_attributes["service"])
+        print(success_query)
+        latest_success = q.query_logs(dd_config, success_query, None, None, False)[0]
+        if latest_success["attributes"]["timestamp"] > job_attributes["timestamp"]:
+            job_attributes["recent_success"] = True
 
     return failed_jobs
 
