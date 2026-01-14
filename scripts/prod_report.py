@@ -82,7 +82,7 @@ def get_synthetic_results(dd_config: Configuration, test_id: str, num_hours:int)
 
 def get_fm_results(dd_config: Configuration, queries: dict, num_hours: int):
     data = q.query_logs(dd_config, queries["get_all_failed"], f"now-{num_hours}h", "now", False)
-    failed_jobs = {"jobs": dict(), "num_distinct_failures": 0, "num_total_failures": 0, "recent_success": False}
+    failed_jobs = {"jobs": dict(), "num_distinct_failures": 0, "num_total_failures": 0}
 
     # Strip query to build dict
     for job in data:
@@ -103,8 +103,9 @@ def get_fm_results(dd_config: Configuration, queries: dict, num_hours: int):
         print(job_name)
         success_query = queries["get_success"].format(service=job_attributes["service"])
         print(success_query)
-        latest_success = q.query_logs(dd_config, success_query, None, None, False)[0]
+        latest_success = q.query_logs(dd_config, success_query, f"now-{num_hours}h", "now", False)[0]
         if latest_success["attributes"]["timestamp"] > job_attributes["timestamp"]:
+            print("More recent success found...")
             job_attributes["recent_success"] = True
 
     return failed_jobs

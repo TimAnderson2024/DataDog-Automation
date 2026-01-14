@@ -77,7 +77,7 @@ def query_logs(dd_config: Configuration, query_string: str, time_from: str, time
             if not response_metadata.get('page', None):
                 break
             query_body.page.cursor = response_metadata['page']['after']
-        
+
     return all_logs
 
 def query_metric(dd_config: V1Configuration, query_string: str, time_from: str, time_to: str) -> list[dict]:
