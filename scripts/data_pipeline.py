@@ -18,11 +18,11 @@ class Data_Point:
     def __str__(self):
         return f"{self.err_type}: {self.value}"
 
-def get_env_data(dd_config: Configuration, env: str, queries: dict) -> dict:
+def get_env_data(dd_config: Configuration, queries: dict) -> dict:
     env_data = { "24h": {}, "2week_avg": {}}
 
     for metric, query in queries.items():
-        value_24h = get_simple_aggregate(dd_config, query, time_from="now-24h")
+        value_24h = get_simple_aggregate(dd_config, query, time_from="24", time_to="now")
         value_2week_avg = get_aggregate_avg(dd_config, query, weeks_back=2, weekday=True, weekend=False)
 
         env_data["24h"][metric] = value_24h
@@ -47,10 +47,14 @@ def main():
     
     env_data = { }
     for env in json_config.keys():
-        env_config, env_queries = json_config[env], json_config[env]["queries"]
+        env_config = json_config[env]
+        env_queries = json_config[env].get("queries")
+        env_synthetics = json_config[env].get("synthetic_tests")
+        env_fm = json_config[env].get("filemover")
+
         try:
             dd_config = get_dd_config(env_config)
-            env_data = env_data | { env: get_env_data(dd_config, env, env_queries) }
+            env_data = env_data | { env: get_env_data(dd_config, env_queries) }
         except KeyError:
             print(f"Skipping {env} due to missing API keys.")
     print(env_data)

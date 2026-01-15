@@ -19,13 +19,13 @@ from utils.json_helpers import load_json_from_file
 import utils.query as q
 from utils.query import get_dd_config, get_simple_aggregate, query_synthetic_test, query_synthetic_uptime
 
-def get_env_data(dd_config: Configuration, queries: dict, synthetics: dict, fm: dict, num_hours: int) -> dict:
+def get_env_data(dd_config: Configuration, queries: dict, synthetics: dict, fm: dict, time_range: tuple[int, int]) -> dict:
     env_data = {}
 
     if queries is not None:
         for metric, query in queries.items():
             print(f"\tRunning query for {metric}")
-            env_data[metric] = get_simple_aggregate(dd_config, query, num_hours)
+            env_data[metric] = q.query_log_count_aggregate(dd_config=dd_config, query_string=query, time_range=time_range)
         print("Query data gathered")
 
     if synthetics is not None: 
@@ -33,7 +33,7 @@ def get_env_data(dd_config: Configuration, queries: dict, synthetics: dict, fm: 
 
         for endpoint, synthetic_id in synthetics.items():
             print(f"Fetching synthetic test results for {endpoint}...")
-            if get_synthetic_results(dd_config, synthetic_id, num_hours):
+            if get_synthetic_results(dd_config, synthetic_id, time_range):
                 env_data[endpoint] = "No failures"
             else:
                 env_data[endpoint] = "Failure detected!"
@@ -42,7 +42,7 @@ def get_env_data(dd_config: Configuration, queries: dict, synthetics: dict, fm: 
     
     if fm is not None:
         print("Checking for failed FM jobs...")
-        fm_results = get_fm_results(dd_config, fm, num_hours)
+        fm_results = get_fm_results(dd_config, fm, time_range)
         env_data["fm_failures"] = fm_results
 
         if env_data["fm_failures"]["num_distinct_failures"] > 0:
@@ -60,11 +60,9 @@ def get_env_data(dd_config: Configuration, queries: dict, synthetics: dict, fm: 
 
     return env_data
 
-def get_synthetic_results(dd_config: Configuration, test_id: str, num_hours:int):
-    time_from, time_to = time.time_range_iso_hours_ago(num_hours)
-
+def get_synthetic_results(dd_config: Configuration, test_id: str, time_range: tuple[int, int]):
     with open('output/synthetic_output.json', 'w') as f:
-        synthetic_results = query_synthetic_test(dd_config, test_id, time.iso_to_unix_milliseconds(time_from), time.iso_to_unix_milliseconds(time_to))
+        synthetic_results = query_synthetic_test(dd_config, test_id, time_range)
         json_synthetic = json.dumps(synthetic_results, indent=4)
         f.write(json_synthetic)
 
@@ -80,8 +78,8 @@ def get_synthetic_results(dd_config: Configuration, test_id: str, num_hours:int)
             
         return failures == 0
 
-def get_fm_results(dd_config: Configuration, queries: dict, num_hours: int):
-    data = q.query_logs(dd_config, queries["get_all_failed"], f"now-{num_hours}h", "now", False)
+def get_fm_results(dd_config: Configuration, queries: dict, time_range: tuple[int, int]):
+    data = q.query_logs(dd_config, queries["get_all_failed"], time_range, False)
     failed_jobs = {"jobs": dict(), "num_distinct_failures": 0, "num_total_failures": 0}
 
     # Strip query to build dict
@@ -103,7 +101,7 @@ def get_fm_results(dd_config: Configuration, queries: dict, num_hours: int):
         print(job_name)
         success_query = queries["get_success"].format(service=job_attributes["service"])
         print(success_query)
-        latest_success = q.query_logs(dd_config, success_query, f"now-{num_hours}h", "now", False)[0]
+        latest_success = q.query_logs(dd_config, success_query, time_range, False)[0]
         if latest_success["attributes"]["timestamp"] > job_attributes["timestamp"]:
             print("More recent success found...")
             job_attributes["recent_success"] = True
@@ -139,7 +137,8 @@ def create_report():
     else:
         num_hours = 24
     print(f"Fetching data for last {num_hours} hours")
-  
+
+    time_range = time.normalize_time(f"now-{num_hours}h", "now") 
     for env in json_config.keys():
         env_config= json_config[env]
         env_queries = json_config[env].get("queries")
@@ -148,7 +147,7 @@ def create_report():
 
         dd_config = get_dd_config(env_config)
         print(f"Gathering report data for {env} environment")
-        env_data[env] = get_env_data(dd_config, env_queries, env_synthetics, env_fm, num_hours)
+        env_data[env] = get_env_data(dd_config, env_queries, env_synthetics, env_fm, time_range)
         print(f"Report data for {env} environment fetched successfully\n")
             
     pprint(env_data)

@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
+import re
 
 def iso_to_unix_milliseconds(iso_time: str) -> int:
     """
@@ -31,3 +32,35 @@ def unix_to_iso(unix_time: int | float) -> str:
 
     dt = datetime.fromtimestamp(unix_time, tz=ZoneInfo("America/New_York"))
     return dt.strftime("%b %#d, %Y at %#I:%M %p est")
+
+_UNIT_MS = {
+    "s": 1000,
+    "m": 60_000,
+    "h": 3_600_000,
+    "d": 86_400_000,
+    "w": 604_800_000,
+}
+
+_NOW_RE = re.compile(r"^now(?:-(\d+)([smhdw]))?$")
+
+def _to_unix_ms(t: str, now_ms: int) -> int:
+    """
+    Convert 'now' or 'now-<N><unit>' to unix ms.
+    """
+    m = _NOW_RE.match(t.strip())
+    if not m:
+        raise ValueError(f"Unsupported time format: {t!r} (expected 'now' or 'now-<N><unit>')")
+    qty, unit = m.groups()
+    if qty is None:
+        return now_ms
+    return now_ms - int(qty) * _UNIT_MS[unit]
+
+def normalize_time(time_from: str, time_to: str) -> tuple[int, int]:
+    now_ms = int(datetime.now(timezone.utc).timestamp() * 1000)
+    from_ms = _to_unix_ms(time_from, now_ms)
+    to_ms = _to_unix_ms(time_to, now_ms)
+
+    if from_ms > to_ms:
+        raise ValueError(f"Invalid range: from ({time_from}) is after to ({time_to})")
+
+    return (from_ms, to_ms)

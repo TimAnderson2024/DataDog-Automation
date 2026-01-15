@@ -44,14 +44,16 @@ def get_v1_dd_config(env_config: dict) -> V1Configuration:
 
     return v1_ddconfig
 
-def query_logs(dd_config: Configuration, query_string: str, time_from: str, time_to: str, keep_tags: bool) -> list[dict]:
+
+
+def query_logs(dd_config: Configuration, query_string: str, time_range: tuple[int, int], keep_tags: bool) -> list[dict]:
     with ApiClient(dd_config) as api_client:
         api_instance = LogsApi(api_client)
         query_body = LogsListRequest(
                 filter=LogsQueryFilter(
                     query=query_string,
-                    _from=time_from,
-                    to=time_to 
+                    _from=str(time_range[0]),
+                    to=str(time_range[1] )
                 ),
                 sort=LogsSort.TIMESTAMP_DESCENDING,
                 page=LogsListRequestPage(limit=1000)
@@ -81,7 +83,6 @@ def query_logs(dd_config: Configuration, query_string: str, time_from: str, time
     return all_logs
 
 def query_metric(dd_config: V1Configuration, query_string: str, time_from: str, time_to: str) -> list[dict]:
-
     with ApiClient(dd_config) as api_client:
         api_instance = V1MetricsApi(api_client)
 
@@ -97,7 +98,9 @@ def query_metric(dd_config: V1Configuration, query_string: str, time_from: str, 
         
         return timeseries
 
-def query_synthetic_test(dd_config: Configuration, test_id: str, time_from: str, time_to: str) -> dict:
+def query_synthetic_test(dd_config: Configuration, test_id: str, time_range) -> dict:
+    time_from, time_to = time_range[0], time_range[1]
+
     with ApiClient(dd_config) as api_client:
         api_instance = SyntheticsApi(api_client)
 
@@ -128,7 +131,7 @@ def query_synthetic_uptime(dd_config: Configuration, test_id: str, time_from: st
         synthetic_test_coverage = api_instance.fetch_uptimes(query_body)[0].to_dict()
         return synthetic_test_coverage
 
-def query_aggregate_count(dd_config: Configuration, query_string: str, time_from: str, time_to: str) -> int:
+def query_log_count_aggregate(dd_config: Configuration, query_string: str, time_range: tuple[int, int]) -> int:
     with ApiClient(dd_config) as api_client:
         api_instance = LogsApi(api_client)
 
@@ -136,8 +139,8 @@ def query_aggregate_count(dd_config: Configuration, query_string: str, time_from
             body=LogsAggregateRequest(
                 filter=LogsQueryFilter(
                     query=query_string,
-                    _from=f"{time_to}-{time_from}h",
-                    to=time_to 
+                    _from=str(time_range[0]),
+                    to=str(time_range[1]) 
                 ),
                 compute=[
                     LogsCompute(
@@ -151,15 +154,15 @@ def query_aggregate_count(dd_config: Configuration, query_string: str, time_from
             return int(response.data.buckets[0].computes.get('c0', 0))
         return 0
 
-def get_simple_aggregate(dd_config: Configuration, query_string: str, time_from: int) -> int:
-    return query_aggregate_count(dd_config, query_string, time_from, "now")
+def get_simple_aggregate(dd_config: Configuration, query_string: str, time_from: str, time_to: str) -> int:
+    return query_log_count_aggregate(dd_config, query_string, time_to, time_from)
 
 def get_filtered_aggregate(dd_config: Configuration, query_string: str, weeks_back: int, weekday = True, weekend = False) -> int:
     weekday_ranges = get_date_ranges(weeks_back, weekday, weekend)
     total_count = 0
 
     for from_time, to_time in weekday_ranges:
-        count = query_aggregate_count(dd_config, query_string, from_time, to_time)
+        count = query_log_count_aggregate(dd_config, query_string, from_time, to_time)
         total_count += count
     
     return total_count
@@ -168,9 +171,9 @@ def get_aggregate_breakdown(dd_config: Configuration, query_string: str, weeks_b
     weekday_ranges = get_date_ranges(weeks_back, weekday, weekend)
     breakdown = {}
 
-    for from_time, to_time in weekday_ranges:
-        count = query_aggregate_count(dd_config, query_string, from_time, to_time)
-        date_key = from_time.split('T')[0]
+    for time_from, time_to in weekday_ranges:
+        count = query_log_count_aggregate(dd_config, query_string, time_from, time_to)
+        date_key = time_from.split('T')[0]
         breakdown[date_key] = count
     
     return breakdown
@@ -183,6 +186,9 @@ def get_aggregate_avg(dd_config: Configuration, query_string: str, weeks_back: i
         return -1  # Avoid division by zero; return -1 to indicate no days found
     
     return total_count // num_days  # Integer division for daily average
+
+
+
 
 def get_num_days(weeks_back: int, weekday: bool, weekend: bool) -> int:
     """
