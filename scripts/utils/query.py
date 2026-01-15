@@ -1,6 +1,4 @@
 import os
-import json
-from datetime import datetime, timedelta
 from datadog_api_client import ApiClient, Configuration
 
 from datadog_api_client.v1 import Configuration as V1Configuration

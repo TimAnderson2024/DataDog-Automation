@@ -1,18 +1,12 @@
 #!/usr/bin/env python
 
 import os
-import datetime
 import json
 from pprint import pprint
 from dotenv import load_dotenv
-from datadog_api_client import ApiClient, Configuration
-from datadog_api_client.v2.api.logs_api import LogsApi
-from datadog_api_client.v2.model.logs_aggregate_request import LogsAggregateRequest
-from datadog_api_client.v2.model.logs_query_filter import LogsQueryFilter
-from datadog_api_client.v2.model.logs_compute import LogsCompute
-from datadog_api_client.v2.model.logs_aggregation_function import LogsAggregationFunction
+from datadog_api_client import Configuration
 from jinja2 import Template
-from datetime import datetime, timezone, date
+from datetime import date
 
 import utils.time_utils as time
 from utils.json_helpers import load_json_from_file
