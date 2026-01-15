@@ -17,8 +17,6 @@ from datadog_api_client.v2.model.logs_list_request_page import LogsListRequestPa
 from datadog_api_client.v2.model.logs_sort import LogsSort
 
 import utils.time_utils as time
-from utils.time_utils import iso_to_unix_seconds
-
 
 def get_dd_config(env_config: dict) -> Configuration:
     ddconfig = Configuration()
@@ -43,8 +41,6 @@ def get_v1_dd_config(env_config: dict) -> V1Configuration:
     v1_ddconfig.api_key["appKeyAuth"] = os.getenv(env_config["APP_KEY"])
 
     return v1_ddconfig
-
-
 
 def query_logs(dd_config: Configuration, query_string: str, time_range: tuple[int, int], keep_tags: bool) -> list[dict]:
     with ApiClient(dd_config) as api_client:
@@ -82,13 +78,13 @@ def query_logs(dd_config: Configuration, query_string: str, time_range: tuple[in
 
     return all_logs
 
-def query_metric(dd_config: V1Configuration, query_string: str, time_from: str, time_to: str) -> list[dict]:
+def query_metric(dd_config: V1Configuration, query_string: str, time_range: tuple[int, int]) -> list[dict]:
     with ApiClient(dd_config) as api_client:
         api_instance = V1MetricsApi(api_client)
 
         response = api_instance.query_metrics(
-            _from=iso_to_unix_seconds(time_from),
-            to=iso_to_unix_seconds(time_to),
+            _from=time_range[0],
+            to=time_range[1],
             query=query_string
         )
 
@@ -152,113 +148,4 @@ def query_log_count_aggregate(dd_config: Configuration, query_string: str, time_
         
         if response.data.buckets and len(response.data.buckets) > 0:
             return int(response.data.buckets[0].computes.get('c0', 0))
-        return 0
-
-def get_simple_aggregate(dd_config: Configuration, query_string: str, time_from: str, time_to: str) -> int:
-    return query_log_count_aggregate(dd_config, query_string, time_to, time_from)
-
-def get_filtered_aggregate(dd_config: Configuration, query_string: str, weeks_back: int, weekday = True, weekend = False) -> int:
-    weekday_ranges = get_date_ranges(weeks_back, weekday, weekend)
-    total_count = 0
-
-    for from_time, to_time in weekday_ranges:
-        count = query_log_count_aggregate(dd_config, query_string, from_time, to_time)
-        total_count += count
-    
-    return total_count
-
-def get_aggregate_breakdown(dd_config: Configuration, query_string: str, weeks_back: int, weekday=True, weekend=False) -> dict:
-    weekday_ranges = get_date_ranges(weeks_back, weekday, weekend)
-    breakdown = {}
-
-    for time_from, time_to in weekday_ranges:
-        count = query_log_count_aggregate(dd_config, query_string, time_from, time_to)
-        date_key = time_from.split('T')[0]
-        breakdown[date_key] = count
-    
-    return breakdown
-
-def get_aggregate_avg(dd_config: Configuration, query_string: str, weeks_back: int, weekday=True, weekend=False) -> int:
-    total_count = get_filtered_aggregate(dd_config, query_string, weeks_back, weekday, weekend)
-    num_days = get_num_days(weeks_back, weekday, weekend)
-
-    if num_days == 0:
-        return -1  # Avoid division by zero; return -1 to indicate no days found
-    
-    return total_count // num_days  # Integer division for daily average
-
-
-
-
-def get_num_days(weeks_back: int, weekday: bool, weekend: bool) -> int:
-    """
-    Calculate the number of days in the last N weeks that are either weekdays or weekends.
-    """
-    today = datetime.now()
-    num_days = 0
-    
-    # Go back 'weeks_back' weeks from today
-    start_date = today - timedelta(weeks=weeks_back)
-    
-    # Iterate through each day from start_date to today
-    current_date = start_date.replace(hour=0, minute=0, second=0, microsecond=0)
-    
-    while current_date.date() <= today.date():
-        # Check if it's a weekday (Monday=0, Sunday=6) or weekend (Saturday=5, Sunday=6)
-        if (weekday and current_date.weekday() < 5) or (weekend and current_date.weekday() > 4):
-            num_days += 1
-        current_date += timedelta(days=1)
-    
-    return num_days
-
-def get_date_ranges(weeks_back: int, weekday: bool, weekend: bool ):
-    """
-    Generate list of (from, to) date tuples for weekdays only in the last N weeks.
-    Returns dates in ISO format suitable for DataDog API.
-    """
-    today = datetime.now()
-    date_ranges = []
-    
-    # Go back 'weeks_back' weeks from today
-    start_date = today - timedelta(weeks=weeks_back)
-    
-    # Iterate through each day from start_date to today
-    current_date = start_date.replace(hour=0, minute=0, second=0, microsecond=0)
-    
-    while current_date.date() <= today.date():
-        # Check if it's a weekday (Monday=0, Sunday=6) or weekend (Saturday=5, Sunday=6)
-        if (weekday and current_date.weekday() < 5) or (weekend and current_date.weekday() > 4):
-            day_start = current_date
-            day_end = current_date.replace(hour=23, minute=59, second=59, microsecond=999999)
-            # Convert to ISO format for DataDog
-            from_time = day_start.isoformat()
-            to_time = day_end.isoformat()
-            date_ranges.append((from_time, to_time))
-        current_date += timedelta(days=1)
-    return date_ranges
-
-def get_weekday_average(dd_config: Configuration, query_string: str, time_from: str) -> int:
-    with ApiClient(dd_config) as api_client:
-        api_instance = LogsApi(api_client)
-        response = api_instance.aggregate_logs(
-            body=LogsAggregateRequest(
-                filter=LogsQueryFilter(
-                    query=query_string,
-                    _from=time_from,
-                    to="now" 
-                ),
-                compute=[
-                    LogsCompute(
-                        aggregation=LogsAggregationFunction.AVG
-                    )
-                ]
-            )
-        )
-
-        print(response.data)
-        
-        if response.data.buckets and len(response.data.buckets) > 0:
-            total_count = int(response.data.buckets[0].computes.get('c0', 0))
-            average = total_count // 14  # Integer division for daily average
-            return average
         return 0

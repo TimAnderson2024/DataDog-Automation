@@ -17,7 +17,6 @@ from datetime import datetime, timezone, date
 import utils.time_utils as time
 from utils.json_helpers import load_json_from_file
 import utils.query as q
-from utils.query import get_dd_config, get_simple_aggregate, query_synthetic_test, query_synthetic_uptime
 
 def get_env_data(dd_config: Configuration, queries: dict, synthetics: dict, fm: dict, time_range: tuple[int, int]) -> dict:
     env_data = {}
@@ -62,7 +61,7 @@ def get_env_data(dd_config: Configuration, queries: dict, synthetics: dict, fm: 
 
 def get_synthetic_results(dd_config: Configuration, test_id: str, time_range: tuple[int, int]):
     with open('output/synthetic_output.json', 'w') as f:
-        synthetic_results = query_synthetic_test(dd_config, test_id, time_range)
+        synthetic_results = q.query_synthetic_test(dd_config, test_id, time_range)
         json_synthetic = json.dumps(synthetic_results, indent=4)
         f.write(json_synthetic)
 
@@ -145,7 +144,7 @@ def create_report():
         env_synthetics = json_config[env].get("synthetic_tests")
         env_fm = json_config[env].get("filemover")
 
-        dd_config = get_dd_config(env_config)
+        dd_config = q.get_dd_config(env_config)
         print(f"Gathering report data for {env} environment")
         env_data[env] = get_env_data(dd_config, env_queries, env_synthetics, env_fm, time_range)
         print(f"Report data for {env} environment fetched successfully\n")

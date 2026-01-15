@@ -50,6 +50,7 @@ def generate_heatmap(current, historical_avg, pct_diff):
 
     return fig
 
+
 def generate_figures():
     heatmap = generate_heatmap()
     heatmap.show()
