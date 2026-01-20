@@ -1,13 +1,15 @@
 #!/usr/bin/env python
 
-from typing import Tuple
+import json
+import argparse
+import heapq
 import pandas as pd
 import utils.time_utils as time
 import utils.query as q
 import generate_figures as fig
-import json
-import argparse
 import numpy as np
+
+from typing import Tuple
 from utils.json_helpers import load_json_from_file
 from datadog_api_client import Configuration
 from dotenv import load_dotenv
@@ -77,8 +79,7 @@ def get_aggregate_avg(dd_config: Configuration, query_string: str, date_range: T
 
     return aggregate // len(date_range)
 
-
-def build_figures(data):
+def build_heatmap(data):
     ALPHA = 1 # Pseudo-count value
 
     print("Building heatmap dataset")
@@ -96,6 +97,19 @@ def build_figures(data):
     print("Heatmap generated, writing to file...")
     baseline_heatmap.write_html("output/baseline_heatmap.html", include_plotlyjs=True)
     comparative_heatmap.write_html("output/comparative_heatmap.html", include_plotlyjs=True)
+
+def build_kpi_strip(data):
+    print("Building indicators")
+    dataset_24h = build_heatmap_dataset(data, "one_day_aggregate")
+    dataset_2week_avg = build_heatmap_dataset(data, "two_week_business_avg")
+    percent_change = (dataset_24h - dataset_2week_avg) / dataset_2week_avg * 100
+    test_indicator = fig.generate_indicator(dataset_24h[0, 0], percent_change[0, 0])
+    test_indicator.write_html("output/test_indicator.html", include_plotlyjs=True)
+
+def build_figures(data):
+    build_heatmap(data)
+    build_kpi_strip(data)    
+
 
 def fetch_data():
     json_config = load_json_from_file("config/queries.json")

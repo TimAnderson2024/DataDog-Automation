@@ -138,6 +138,20 @@ def generate_heatmap_baseline(
 
     return fig
 
+def generate_indicator(value, delta): 
+    fig = go.Figure()
+    indicator = go.Indicator(
+        mode="number+delta",
+        value=value,
+        delta={'position': 'bottom', 
+               'reference': delta,
+               'relative': True, 
+               'valueformat': '.2%'},
+    )
+    fig.add_trace(indicator)
+
+    return fig
+
 def main():
     pass
 
