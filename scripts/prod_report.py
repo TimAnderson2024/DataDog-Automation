@@ -74,11 +74,22 @@ def get_synthetic_results(dd_config: Configuration, test_id: str, time_range: tu
 def get_fm_results(dd_config: Configuration, queries: dict, time_range: tuple[int, int]):
     data = q.query_logs(dd_config, queries["get_all_failed"], time_range, False)
     failed_jobs = {"jobs": dict(), "num_distinct_failures": 0, "num_total_failures": 0}
+    print(data)
 
     # Strip query to build dict
     for job in data:
         service = job["attributes"]["service"]
-        name = job["attributes"]["attributes"]["fm_job"]["name"]
+
+        try:
+            name = job["attributes"]["attributes"]["fm_job"]["name"]        
+        except:
+            print("Log attributes not properly formatted: attributes.attributes.fm_job.name does not exist. Using tags.app instead...")
+            for tag in job["attributes"]["tags"]:   
+                tag_name, tag_value = tag.split(":")
+                if tag_name == "app":
+                    name = tag_value
+                    break
+
         timestamp = job["attributes"]["timestamp"]
 
         if not failed_jobs.get("jobs").get(name, None):

@@ -23,7 +23,7 @@ def get_env_data(dd_config: Configuration, queries: dict) -> dict:
     env_data = { "one_day_aggregate": {}, "two_week_business_avg": {}, "two_week_weekend_avg" : {} }
 
     for metric, query in queries.items():
-        value_24h = q.query_log_count_aggregate(dd_config, query, time_from="24", time_to="now")
+        value_24h = q.query_log_count_aggregate(dd_config, query, time.normalize_time("now-24h", "now"))
         weekday_avg, weekend_avg = get_daily_aggregate_avg(dd_config, query, weeks_back=2)
 
         env_data["one_day_aggregate"][metric] = value_24h
@@ -40,6 +40,7 @@ def build_heatmap_dataset(env_data: dict, aggregate_period: str, error_types: li
             temp_list.append(env_data[env][aggregate_period][err_type])
             
         temp_lists.append(temp_list)
+        print(temp_list)
     
     return pd.DataFrame(temp_lists)
 
@@ -82,14 +83,13 @@ def main():
         env_synthetics = json_config[env].get("synthetic_tests")
         env_fm = json_config[env].get("filemover")
 
-        try:
+        if env_queries:
             dd_config = q.get_dd_config(env_config)
             env_data = env_data | { env: get_env_data(dd_config, env_queries) }
-        except KeyError:
-            print(f"Skipping {env} due to missing API keys.")
+
     print(env_data)
-    dataset_24h = build_heatmap_dataset(env_data, "24h")
-    dataset_2week_avg = build_heatmap_dataset(env_data, "2week_avg")
+    dataset_24h = build_heatmap_dataset(env_data, "one_day_aggregate")
+    dataset_2week_avg = build_heatmap_dataset(env_data, "two_week_business_avg")
     pct_diff = (dataset_24h - dataset_2week_avg) / dataset_2week_avg * 100
 
     heatmap = generate_heatmap(dataset_24h, dataset_2week_avg, pct_diff)
