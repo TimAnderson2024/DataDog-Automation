@@ -4,13 +4,13 @@ from typing import Tuple
 import pandas as pd
 import utils.time_utils as time
 import utils.query as q
+import generate_figures as fig
 import json
 import argparse
-import plotly.io as pio
+import numpy as np
 from utils.json_helpers import load_json_from_file
 from datadog_api_client import Configuration
 from dotenv import load_dotenv
-from generate_figures import generate_heatmap
 
 DATASET_FILEPATH = "./output/heatmap_data.json"
 
@@ -57,7 +57,7 @@ def build_heatmap_dataset(env_data: dict, aggregate_period: str, error_types: li
             
         temp_lists.append(temp_list)
     
-    return pd.DataFrame(temp_lists)
+    return np.array(temp_lists)
 
 def get_filtered_aggregates(dd_config, query_string, date_range):
     """
@@ -77,17 +77,25 @@ def get_aggregate_avg(dd_config: Configuration, query_string: str, date_range: T
 
     return aggregate // len(date_range)
 
+
 def build_figures(data):
+    ALPHA = 1 # Pseudo-count value
+
     print("Building heatmap dataset")
     dataset_24h = build_heatmap_dataset(data, "one_day_aggregate")
     print(dataset_24h)
     dataset_2week_avg = build_heatmap_dataset(data, "two_week_business_avg")
     print(dataset_2week_avg)
-    pct_diff = (dataset_24h - dataset_2week_avg) / dataset_2week_avg * 100
 
-    print("Generating heatmap")
-    heatmap = generate_heatmap(dataset_24h, dataset_2week_avg, pct_diff)
-    heatmap.write_html("output/hashmap.html", include_plotlyjs=True)
+    baseline_deviation = np.log10(dataset_24h + ALPHA)
+    comparative_deviation = np.log10((dataset_24h + ALPHA) / (dataset_2week_avg + ALPHA))
+
+    print("Generating heatmap...")
+    baseline_heatmap = fig.generate_heatmap_baseline(dataset_24h, dataset_2week_avg, baseline_deviation)
+    comparative_heatmap = fig.generate_heatmap_comparative(dataset_24h, dataset_2week_avg, comparative_deviation)
+    print("Heatmap generated, writing to file...")
+    baseline_heatmap.write_html("output/baseline_heatmap.html", include_plotlyjs=True)
+    comparative_heatmap.write_html("output/comparative_heatmap.html", include_plotlyjs=True)
 
 def fetch_data():
     json_config = load_json_from_file("config/queries.json")
