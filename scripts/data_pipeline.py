@@ -6,6 +6,7 @@ import utils.time_utils as time
 import utils.query as q
 import json
 import argparse
+import plotly.io as pio
 from utils.json_helpers import load_json_from_file
 from datadog_api_client import Configuration
 from dotenv import load_dotenv
@@ -55,7 +56,6 @@ def build_heatmap_dataset(env_data: dict, aggregate_period: str, error_types: li
             temp_list.append(env_data[env][aggregate_period][err_type])
             
         temp_lists.append(temp_list)
-        print(temp_list)
     
     return pd.DataFrame(temp_lists)
 
@@ -76,6 +76,18 @@ def get_aggregate_avg(dd_config: Configuration, query_string: str, date_range: T
     aggregate = get_filtered_aggregates(dd_config, query_string, date_range)
 
     return aggregate // len(date_range)
+
+def build_figures(data):
+    print("Building heatmap dataset")
+    dataset_24h = build_heatmap_dataset(data, "one_day_aggregate")
+    print(dataset_24h)
+    dataset_2week_avg = build_heatmap_dataset(data, "two_week_business_avg")
+    print(dataset_2week_avg)
+    pct_diff = (dataset_24h - dataset_2week_avg) / dataset_2week_avg * 100
+
+    print("Generating heatmap")
+    heatmap = generate_heatmap(dataset_24h, dataset_2week_avg, pct_diff)
+    heatmap.write_html("output/hashmap.html", include_plotlyjs=True)
 
 def fetch_data():
     json_config = load_json_from_file("config/queries.json")
@@ -117,18 +129,8 @@ def parse_args():
 def main():
     load_dotenv()
     env_data = parse_args()
-
-    print(env_data)
-
-    print("Building heatmap dataset")
-    dataset_24h = build_heatmap_dataset(env_data, "one_day_aggregate")
-    print(dataset_24h)
-    dataset_2week_avg = build_heatmap_dataset(env_data, "two_week_business_avg")
-    pct_diff = (dataset_24h - dataset_2week_avg) / dataset_2week_avg * 100
-
-    print("Generating heatmap")
-    heatmap = generate_heatmap(dataset_24h, dataset_2week_avg, pct_diff)
-    heatmap.show()
+    build_figures(env_data)
+    
 
 if __name__ == "__main__":
     main()
