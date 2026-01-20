@@ -4,10 +4,14 @@ from typing import Tuple
 import pandas as pd
 import utils.time_utils as time
 import utils.query as q
+import json
+import argparse
 from utils.json_helpers import load_json_from_file
 from datadog_api_client import Configuration
 from dotenv import load_dotenv
 from generate_figures import generate_heatmap
+
+DATASET_FILEPATH = "./output/heatmap_data.json"
 
 class Data_Point:
     def __init__(self, err_type: str, value: int):
@@ -73,8 +77,7 @@ def get_aggregate_avg(dd_config: Configuration, query_string: str, date_range: T
 
     return aggregate // len(date_range)
 
-def main():
-    load_dotenv()
+def fetch_data():
     json_config = load_json_from_file("config/queries.json")
     
     env_data = { }
@@ -92,9 +95,34 @@ def main():
     print("Gathered data:")
     for key, val in env_data.items():
         print(key, val)
+    
+    with open(DATASET_FILEPATH, "w") as f:
+        json.dump(env_data, f)
+    
+    return env_data
+
+def parse_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--saved", action="store_true", help="Use saved dataset instead of fetching fresh data")
+    args = parser.parse_args()
+
+    if args.saved:
+        with open(DATASET_FILEPATH, "r") as f:
+            env_data = json.load(f)
+    else:
+        env_data = fetch_data()
+    
+    return env_data
+
+def main():
+    load_dotenv()
+    env_data = parse_args()
+
+    print(env_data)
 
     print("Building heatmap dataset")
     dataset_24h = build_heatmap_dataset(env_data, "one_day_aggregate")
+    print(dataset_24h)
     dataset_2week_avg = build_heatmap_dataset(env_data, "two_week_business_avg")
     pct_diff = (dataset_24h - dataset_2week_avg) / dataset_2week_avg * 100
 
