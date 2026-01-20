@@ -132,7 +132,7 @@ def write_report(compiled_data: dict, num_hours: int) -> str:
     
     return output_path
 
-def create_report():
+def prod_report():
     json_config = load_json_from_file('config/queries.json')
     env_data = {}
 
@@ -161,7 +161,7 @@ def create_report():
 
 def main():
     load_dotenv()
-    create_report()
+    prod_report()
     
 
 

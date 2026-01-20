@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+from typing import Tuple
 import pandas as pd
 import utils.time_utils as time
 import utils.query as q
@@ -19,15 +20,25 @@ class Data_Point:
     def __str__(self):
         return f"{self.err_type}: {self.value}"
 
-def get_env_data(dd_config: Configuration, queries: dict) -> dict:
+def get_env_data(dd_config: Configuration, queries: dict, days_back: int) -> dict:
+    business, weekend = time.get_filtered_date_ranges(days_back)
     env_data = { "one_day_aggregate": {}, "two_week_business_avg": {}, "two_week_weekend_avg" : {} }
 
     for metric, query in queries.items():
-        value_24h = q.query_log_count_aggregate(dd_config, query, time.normalize_time("now-24h", "now"))
-        weekday_avg, weekend_avg = get_daily_aggregate_avg(dd_config, query, weeks_back=2)
+        print(f"Fetching 24h {metric} value...")
+        value_24h = q.query_log_count_aggregate(dd_config, query, ("now-24h", "now"))
+        print(f"24h value is {value_24h}")
+        
+        print(f"Fetching business day average for past {days_back} days")
+        business_avg = get_aggregate_avg(dd_config, query, business)
+        print(f"Business day average is {business_avg}")
+        
+        print(f"Fetching weekend average for past {days_back} days")
+        weekend_avg = get_aggregate_avg(dd_config, query, weekend)
+        print(f"Weekend average is {weekend_avg}")
 
         env_data["one_day_aggregate"][metric] = value_24h
-        env_data["two_week_business_avg"][metric] = weekday_avg
+        env_data["two_week_business_avg"][metric] = business_avg
         env_data["two_week_weekend_avg"][metric] = weekend_avg
 
     return env_data
@@ -44,33 +55,23 @@ def build_heatmap_dataset(env_data: dict, aggregate_period: str, error_types: li
     
     return pd.DataFrame(temp_lists)
 
-def get_filtered_aggregates(dd_config, query_string, num_weeks):
+def get_filtered_aggregates(dd_config, query_string, date_range):
     """
     Return two aggregate counts of the query string, weekday and weekend
     
     :param num_weeks: Number of weeks to gather logs for
     :param is_weekday: Description
     """
-    weekday_ranges = time.get_filtered_date_ranges(weeks_back=num_weeks, weekday=True, weekend=False)
-    weekend_ranges = time.get_filtered_date_ranges(weeks_back=num_weeks, weekday=False, weekend=True)
+    aggregate = 0
+    for from_time, to_time in date_range:
+        aggregate += q.query_log_count_aggregate(dd_config, query_string, time_range=(from_time, to_time))
 
-    weekday_aggregate = 0
-    for from_time, to_time in weekday_ranges:
-        weekday_aggregate += q.query_log_count_aggregate(dd_config, query_string, time_range=(from_time, to_time))
-    
-    weekend_aggregate = 0
-    for from_time, to_time in weekend_ranges:
-        weekend_aggregate += q.query_log_count_aggregate(dd_config, query_string, time_range=(from_time, to_time))
+    return aggregate
 
-    return weekday_aggregate, weekend_aggregate
+def get_aggregate_avg(dd_config: Configuration, query_string: str, date_range: Tuple[str, str]):
+    aggregate = get_filtered_aggregates(dd_config, query_string, date_range)
 
-def get_daily_aggregate_avg(dd_config: Configuration, query_string: str, weeks_back: int):
-    weekday_aggregate, weekend_aggregate = get_filtered_aggregates(dd_config, query_string=query_string, num_weeks=weeks_back)
-
-    avg_weekday = weekday_aggregate // (weeks_back * 5)
-    avg_weekend = weekend_aggregate // (weeks_back * 2)
-
-    return avg_weekday, avg_weekend
+    return aggregate // len(date_range)
 
 def main():
     load_dotenv()
@@ -83,15 +84,21 @@ def main():
         env_synthetics = json_config[env].get("synthetic_tests")
         env_fm = json_config[env].get("filemover")
 
+        print(f"Gathering report data for {env} environment")
         if env_queries:
             dd_config = q.get_dd_config(env_config)
-            env_data = env_data | { env: get_env_data(dd_config, env_queries) }
+            env_data = env_data | { env: get_env_data(dd_config, env_queries, days_back=14) }
 
-    print(env_data)
+    print("Gathered data:")
+    for key, val in env_data.items():
+        print(key, val)
+
+    print("Building heatmap dataset")
     dataset_24h = build_heatmap_dataset(env_data, "one_day_aggregate")
     dataset_2week_avg = build_heatmap_dataset(env_data, "two_week_business_avg")
     pct_diff = (dataset_24h - dataset_2week_avg) / dataset_2week_avg * 100
 
+    print("Generating heatmap")
     heatmap = generate_heatmap(dataset_24h, dataset_2week_avg, pct_diff)
     heatmap.show()
 

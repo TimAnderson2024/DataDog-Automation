@@ -65,28 +65,20 @@ def normalize_time(time_from: str, time_to: str) -> tuple[int, int]:
 
     return (from_ms, to_ms)
 
-def get_filtered_date_ranges(weeks_back: int, weekday: bool, weekend: bool ):
+def get_filtered_date_ranges(days_back: int):
     """
     Generate list of (from, to) date tuples for weekdays only in the last N weeks.
     Returns dates in ISO format suitable for DataDog API.
     """
-    today = datetime.now()
-    date_ranges = []
     
-    # Go back 'weeks_back' weeks from today
-    start_date = today - timedelta(weeks=weeks_back)
-    
-    # Iterate through each day from start_date to today
-    current_date = start_date.replace(hour=0, minute=0, second=0, microsecond=0)
-    
-    while current_date.date() <= today.date():
-        # Check if it's a weekday (Monday=0, Sunday=6) or weekend (Saturday=5, Sunday=6)
-        if (weekday and current_date.weekday() < 5) or (weekend and current_date.weekday() > 4):
-            day_start = current_date
-            day_end = current_date.replace(hour=23, minute=59, second=59, microsecond=999999)
-            # Convert to ISO format for DataDog
-            from_time = day_start.isoformat()
-            to_time = day_end.isoformat()
-            date_ranges.append((from_time, to_time))
-        current_date += timedelta(days=1)
-    return date_ranges
+    hours_ago = days_back * 24
+    business, weekends = [], []
+    while hours_ago > 0:
+        time_from, time_to = f"now-{hours_ago}h", f"now-{hours_ago-24}h"
+        if (datetime.now() - timedelta(hours_ago - 1)).weekday() < 5:
+            business.append((time_from, time_to))
+        else:
+            weekends.append((time_from, time_to))
+        hours_ago -= 24
+
+    return business, weekends
