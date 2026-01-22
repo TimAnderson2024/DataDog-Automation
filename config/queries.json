@@ -12,8 +12,8 @@
             "allocore": "bsi-2qz-vvt"
         },
         "filemover": {
-            "get_all_failed": "kube_namespace:*ktrs run_job.sh result for job failed env:(ulp-prod OR cls-prod)",
-            "get_success": "kube_namespace:*ktrs result for job success service: {service}"
+            "get_all_failed": "run_job.sh result for job failed env:(ulp-prod OR cls-prod)",
+            "get_success": "result for job job success service:{service} env:(ulp-prod OR cls-prod)"
         }
     },
     "cls": {
