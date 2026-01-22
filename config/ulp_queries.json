@@ -6,5 +6,8 @@
         "504": "env:ulp-prod status:error @http.status_code:504 service:elb",
         "502": "env:ulp-prod status:error @http.status_code:502 service:elb",
         "oom": "env:ulp-prod status:error (OutOfMemoryError OR \"out of memory\" OR OOM)"
+    },
+    "synthetic_tests": {
+        "allocore": "bsi-2qz-vvt"
     }
 }
