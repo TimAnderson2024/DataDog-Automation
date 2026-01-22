@@ -16,18 +16,21 @@ from datadog_api_client.v2.model.logs_sort import LogsSort
 
 import utils.time_utils as time
 
-def get_dd_config(env_config: dict) -> Configuration:
-    ddconfig = Configuration()
-    ddconfig.server_variables["site"] = env_config["DD_URL"]
+DATADOG_URL = "datadoghq.com"
 
-    if not os.getenv(env_config["API_KEY"]) or not os.getenv(env_config["APP_KEY"]):
-        raise KeyError("API_KEY and APP_KEY must be defined in the environment configuration.")
+def get_dd_config(api_key: str, app_key: str) -> Configuration:
+    ddconfig = Configuration()
+    ddconfig.server_variables["site"] = DATADOG_URL
     
-    ddconfig.api_key["apiKeyAuth"] = os.getenv(env_config["API_KEY"])
-    ddconfig.api_key["appKeyAuth"] = os.getenv(env_config["APP_KEY"])
+    if not os.getenv(api_key) or not os.getenv(app_key):
+        raise KeyError("API_KEY and APP_KEY must be defined in the environment configuration.")
+
+    ddconfig.api_key["apiKeyAuth"] = os.getenv(api_key)
+    ddconfig.api_key["appKeyAuth"] = os.getenv(app_key)
 
     return ddconfig
 
+# TODO: Make DD config universal between v1/v2
 def get_v1_dd_config(env_config: dict) -> V1Configuration:
     v1_ddconfig = V1Configuration()
     v1_ddconfig.server_variables["site"] = env_config["DD_URL"]
@@ -143,7 +146,7 @@ def query_log_count_aggregate(dd_config: Configuration, query_string: str, time_
                 ]
             )
         )
-        
+
         if response.data.buckets and len(response.data.buckets) > 0:
             return int(response.data.buckets[0].computes.get('c0', 0))
         return 0

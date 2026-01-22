@@ -4,28 +4,21 @@ import json
 import argparse
 import heapq
 import pandas as pd
+import sys
 import utils.time_utils as time
 import utils.query as q
 import generate_figures as fig
 import numpy as np
 
+from dataclasses import dataclass
 from typing import Tuple
 from utils.json_helpers import load_json_from_file
 from datadog_api_client import Configuration
 from dotenv import load_dotenv
+from pathlib import Path
+from datetime import datetime
 
 DATASET_FILEPATH = "./output/heatmap_data.json"
-
-class Data_Point:
-    def __init__(self, err_type: str, value: int):
-        self.err_type = err_type
-        self.value = value
-    
-    def __repr__(self):
-        return f"Data_Point(err={self.err_type}, value={self.value})"
-
-    def __str__(self):
-        return f"{self.err_type}: {self.value}"
 
 def get_env_data(dd_config: Configuration, queries: dict, days_back: int) -> dict:
     business, weekend = time.get_filtered_date_ranges(days_back)

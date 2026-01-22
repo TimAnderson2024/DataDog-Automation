@@ -1,0 +1,10 @@
+{
+    "name": "ulp",
+    "API_KEY": "DD_ULP_API_KEY",
+    "APP_KEY": "DD_ULP_APP_KEY",
+    "queries": {
+        "504": "env:ulp-prod status:error @http.status_code:504 service:elb",
+        "502": "env:ulp-prod status:error @http.status_code:502 service:elb",
+        "oom": "env:ulp-prod status:error (OutOfMemoryError OR \"out of memory\" OR OOM)"
+    }
+}
