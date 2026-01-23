@@ -13,20 +13,20 @@ from datadog_api_client import Configuration
 ULP_QUERIES_PATH = "config/ulp_queries.json"
 
 @dataclass 
-class QueryResult:
+class AggregateResult:
     name: str
     query: str
-    result: int
+    aggregate: int
 
     def __repr__(self) -> str:
         query_preview = (
             self.query if len(self.query) <= 60 else self.query[:57] + "..."
         )
         return (
-            f"QueryResult("
+            f"AggregateResult("
             f"name={self.name!r}, "
             f"query={query_preview!r}, "
-            f"result={self.result}"
+            f"aggregate={self.aggregate}"
             f")"
         )
     
@@ -51,7 +51,7 @@ class SyntheticResult:
         self.success, self.failure = success, failure
 
 class EnvData:
-    def __init__(self, env: str, err_by_type: dict[str, QueryResult], synthetic_results: dict[str, SyntheticResult]):
+    def __init__(self, env: str, err_by_type: dict[str, AggregateResult], synthetic_results: dict[str, SyntheticResult]):
         self.env = env
         self._errs = err_by_type
 
@@ -60,7 +60,7 @@ class EnvData:
         
         self.synthetic_tests = synthetic_results
     
-    def __getitem__(self, key: str) -> QueryResult:
+    def __getitem__(self, key: str) -> AggregateResult:
         return self._errs[key]
     
     def __repr__(self) -> str:
@@ -109,23 +109,22 @@ class EnvDataFactory:
             print(f"Failed to create EnvData for {env_name} due to missing API or APP key")
             sys.exit(1)
 
-        # Make queries and record results 
+        # Send aggregate queries
         timerange = utils.time_utils.normalize_time(start, end)
-
         queries: dict = json_config["queries"]
-        err_by_type: dict[str, QueryResult] = {}
+        err_by_type: dict[str, AggregateResult] = {}
         for err_name, query in queries.items():
             raw_result: int = q.query_log_count_aggregate(dd_config, query, timerange)
-            result = QueryResult(err_name, query, raw_result)
+            result = AggregateResult(err_name, query, raw_result)
             err_by_type[err_name] = result
         
+        # Send synthetic querues
         synthetics: dict = json_config["synthetic_tests"]
         synthetic_results: dict[str, SyntheticResult] = {}
         for synth_name, synth_id in synthetics.items():
             raw_result: list[dict] = q.query_synthetic_test(dd_config, synth_id, timerange)
             result = SyntheticResult(synth_name, synth_id, raw_result)
             synthetic_results[synth_name] = result
-
                 
         return EnvData(env_name, err_by_type, synthetic_results)
 

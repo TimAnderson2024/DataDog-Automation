@@ -10,6 +10,7 @@ from datetime import date
 
 import utils.time_utils as time
 from utils.json_helpers import load_json_from_file
+from env_data import EnvDataFactory
 import utils.query as q
 
 def get_env_data(dd_config: Configuration, queries: dict, synthetics: dict, fm: dict, time_range: tuple[int, int]) -> dict:
@@ -167,10 +168,32 @@ def prod_report():
     out_path = write_report(env_data, num_hours)
     print(f"View report: \n{out_path}")
 
+ULP_QUERIES_PATH = "config/ulp_queries.json"
+TEST_PATH = "output/test_report.txt"
+
+def build_report():
+    ulp_data = EnvDataFactory.from_json_file(ULP_QUERIES_PATH, "now-24h", "now")
+    with open('templates/report_2.md') as f:
+        template = Template(f.read())
+
+    data = { "ulp" : ulp_data }
+    output = template.render(
+        date=date.today(),
+        data=data
+    )
+
+    output_path = f"{TEST_PATH} Business Day Infra Report {date.today()}.md"
+
+    with open(output_path, 'w') as out_f:
+        out_f.write(output)
+    
+    print(output_path)
+    return output_path
+
 
 def main():
     load_dotenv()
-    prod_report()
+    build_report()
     
 
 
