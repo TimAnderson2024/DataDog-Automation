@@ -1,47 +1,59 @@
-{
-    "ulp": {
-        "DD_URL": "datadoghq.com",
+[
+    {
+        "name": "ulp",
         "API_KEY": "DD_ULP_API_KEY",
         "APP_KEY": "DD_ULP_APP_KEY",
-        "queries": {
+        "aggregate_queries": {
             "504": "env:ulp-prod status:error @http.status_code:504 service:elb",
-            "502": "env:ulp-prod status:error @http.status_code:502 service:elb",
+            "502": "env:ulp-prod status:error @http.status_code:502 service:elb"
+        },
+        "event_queries": {
             "oom": "env:ulp-prod status:error (OutOfMemoryError OR \"out of memory\" OR OOM)"
         },
-        "synthetic_tests": {
+        "synthetic_queries": {
             "allocore": "bsi-2qz-vvt"
         },
-        "filemover": {
-            "get_all_failed": "run_job.sh result for job failed env:(ulp-prod OR cls-prod)",
-            "get_success": "result for job job success service:{service} env:(ulp-prod OR cls-prod)"
+        "log_queries": {
+            "failed_fm_jobs": "kube_namespace:*ktrs run_job.sh result for job failed env:ulp-prod"
         }
+        
     },
-    "cls": {
-        "DD_URL": "datadoghq.com",
+    {
+        "name": "cls",
         "API_KEY": "DD_ULP_API_KEY",
         "APP_KEY": "DD_ULP_APP_KEY",
-        "queries": {
+        "aggregate_queries": {
             "504": "env:cls-prod status:error @http.status_code:504 service:elb",
-            "502": "env:cls-prod status:error @http.status_code:502 service:elb",
+            "502": "env:cls-prod status:error @http.status_code:502 service:elb"
+        },
+        "event_queries": {
             "oom": "env:cls-prod status:error (OutOfMemoryError OR \"out of memory\" OR OOM)"
+        },
+        "log_queries": {
+            "failed_fm_jobs": "kube_namespace:*ktrs run_job.sh result for job failed env:cls-prod"
         }
     },
-    "los": {
-        "DD_URL": "datadoghq.com",
+    {
+        "name": "los",
         "API_KEY": "DD_LOS_API_KEY",
         "APP_KEY": "DD_LOS_APP_KEY",
-        "queries": {
+        "aggregate_queries": {
             "504": "env:prod status:error @http.status_code:504",
-            "502": "env:prod status:error @http.status_code:502",
+            "502": "env:prod status:error @http.status_code:502"
+        },
+        "event_queries": {
             "oom": "env:prod status:error (OutOfMemoryError OR \"out of memory\" OR OOM)"
+        },
+        "log_queries": {
+            "failed_fm_jobs": "kube_namespace:*ktrs run_job.sh result for job failed env:los-prod"
         }
     },
-    "stg-core": {
-        "DD_URL": "datadoghq.com",
+    {
+        "name": "stg-core",
         "API_KEY": "DD_CORE_API_KEY",
         "APP_KEY": "DD_CORE_APP_KEY",
-        "synthetic_tests": {
+        "synthetic_queries": {
             "urifinvest": "jrd-tg4-3gt"
         }
     }
-}
+]

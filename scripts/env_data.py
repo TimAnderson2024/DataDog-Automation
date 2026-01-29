@@ -13,6 +13,19 @@ from datadog_api_client import Configuration
 ULP_QUERIES_PATH = "config/ulp_queries.json"
 
 @dataclass 
+class LogResult:
+    name: str
+    query: str
+    raw: list[dict]
+    aggregate: int 
+
+    def __init__(self, name: str, query: str, raw: list[dict]):
+        self.name = name
+        self.query = query
+        self.raw = raw
+        self.aggregate = len(raw)
+
+@dataclass 
 class AggregateResult:
     name: str
     query: str
@@ -55,15 +68,39 @@ class SyntheticResult:
         if failure != 0:
             self.has_failures = True
 
+@dataclass
+class EventResult:
+    name: str
+    query: str
+    event_list: list
+    aggregate: int
+
+    def __init__(self, name: str, query: str, result: list) -> EventResult:
+        self.name = name
+        self.query = query
+        self.event_list = result
+        self.aggregate = len(result)
+
+
 class EnvData:
-    def __init__(self, env: str, err_by_type: dict[str, AggregateResult], synthetic_results: dict[str, SyntheticResult]):
+    def __init__(
+        self, 
+        env: str, 
+        err_by_type: dict[str, AggregateResult], 
+        log_results: dict[str, LogResult],
+        event_results: dict[str, EventResult], 
+        synthetic_results: dict[str, SyntheticResult],
+        ) -> EnvData:
+
         self.env = env
         self._errs = err_by_type
 
         for err_type, result in err_by_type.items():
             setattr(self, err_type, result)
-        
-        self.synthetic_tests = synthetic_results
+
+        self.log_results = log_results
+        self.event_results = event_results
+        self.synthetic_results = synthetic_results
     
     def __getitem__(self, key: str) -> AggregateResult:
         return self._errs[key]
@@ -77,10 +114,16 @@ class EnvData:
                 result = self._errs[key]
                 lines.append(f"  {key}: {result!r}")
 
-        if self.synthetic_tests:
+        if self.event_results:
+            lines.append(" Event Results:")
+            for key in sorted(self.event_results):
+                event = self.event_results[key]
+                lines.append(f"{key}: {event.aggregate}")
+
+        if self.synthetic_results:
             lines.append(" SyntheticResults:")
-            for key in sorted(self.synthetic_tests):
-                synth = self.synthetic_tests[key]
+            for key in sorted(self.synthetic_results):
+                synth = self.synthetic_results[key]
                 lines.append(
                     f"  {key}: SyntheticResult("
                     f"name={synth.name!r}, "
@@ -119,6 +162,24 @@ class EnvDataFactory:
                 result = AggregateResult(err_name, query, raw_result)
                 err_by_type[err_name] = result
         
+        # Send log queries
+        log_queries: dict = json_config.get("log_queries")
+        log_results: dict[str, LogResult] = {}
+        if log_queries:
+            for name, query in log_queries.items():
+                raw: list[dict] = q.query_logs(dd_config, query, timerange)
+                result: LogResult = LogResult(name, query, raw)
+                log_results[name] = result
+
+        # Send event queries
+        event_queries: dict = json_config.get("event_queries")
+        event_results: dict[str, EventResult] = {}
+        if event_queries:
+            for event_name, query in event_queries.items():
+                raw = q.query_events(dd_config, query, timerange)
+                result = EventResult(event_name, query, raw)
+                event_results[event_name] = result
+            
         # Send synthetic queries
         synthetic_queries: dict = json_config.get("synthetic_queries")
         synthetic_results: dict[str, SyntheticResult] = {}
@@ -128,7 +189,7 @@ class EnvDataFactory:
                 result = SyntheticResult(synth_name, synth_id, raw_result)
                 synthetic_results[synth_name] = result
                 
-        return EnvData(env_name, err_by_type, synthetic_results)
+        return EnvData(env_name, err_by_type, log_results, event_results, synthetic_results)
         
     @classmethod
     def from_json_file(

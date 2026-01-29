@@ -13,11 +13,11 @@ from utils.json_helpers import load_json_from_file
 from env_data import EnvDataFactory
 import utils.query as q
 
-ULP_QUERIES_PATH = "config/ulp_queries.json"
+QUERY_PATH = "config/queries.json"
 TEST_PATH = "output/test_report.txt"
 
 def report_builder():
-    data = EnvDataFactory.from_json_file(ULP_QUERIES_PATH, "now-24h", "now")
+    data = EnvDataFactory.from_json_file(QUERY_PATH, "now-24h", "now")
     
     for env in data:
         print(json.dumps(env, default=str, indent=2))

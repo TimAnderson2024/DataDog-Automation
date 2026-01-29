@@ -16,6 +16,8 @@ from datadog_api_client.v2.model.logs_aggregation_function import LogsAggregatio
 from datadog_api_client.v2.model.logs_list_request import LogsListRequest
 from datadog_api_client.v2.model.logs_list_request_page import LogsListRequestPage
 from datadog_api_client.v2.model.logs_sort import LogsSort
+from datadog_api_client.v2.model.events_request_page import EventsRequestPage
+
 
 import utils.time_utils as time
 
@@ -46,7 +48,7 @@ def get_v1_dd_config(env_config: dict) -> V1Configuration:
 
     return v1_ddconfig
 
-def query_logs(dd_config: Configuration, query_string: str, time_range: tuple[int, int], keep_tags: bool) -> list[dict]:
+def query_logs(dd_config: Configuration, query_string: str, time_range: tuple[int, int]) -> list[dict]:
     with ApiClient(dd_config) as api_client:
         api_instance = LogsApi(api_client)
         query_body = LogsListRequest(
@@ -65,12 +67,6 @@ def query_logs(dd_config: Configuration, query_string: str, time_range: tuple[in
             response = api_instance.list_logs(body=query_body)
             response_data = response.data
             response_metadata = response.meta.to_dict()
-            
-            # Strip tags
-            if not keep_tags:
-                for entry in response_data:
-                    entry = entry.to_dict()
-                    entry.get("attributes", {}).pop("tags", None)
 
             all_logs.extend(response_data)
             logs_processed += len(response_data)
@@ -105,9 +101,10 @@ def query_events(dd_config: Configuration, query_string: str, time_range: tuple[
         query_body = EventsListRequest(
             filter=EventsQueryFilter(
                 query=query_string,
-                _from=time_range[0],
-                to=time_range[1]
-            )
+                _from=str(time_range[0]),
+                to=str(time_range[1])
+            ),
+            page=EventsRequestPage(limit=1000)
         )
 
         all_logs = []
