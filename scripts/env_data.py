@@ -36,6 +36,7 @@ class SyntheticResult:
     logs: list[dict]
     failure_count: int
     success_count: int
+    has_failures: bool
 
     def __init__(self, name, synth_id, query_logs):
         self.name = name
@@ -48,7 +49,11 @@ class SyntheticResult:
                 success += 1
             else:
                 failure += 1
-        self.success, self.failure = success, failure
+        self.success_count, self.failure_count = success, failure
+        
+        self.has_failures = False
+        if failure != 0:
+            self.has_failures = True
 
 class EnvData:
     def __init__(self, env: str, err_by_type: dict[str, AggregateResult], synthetic_results: dict[str, SyntheticResult]):
@@ -80,8 +85,8 @@ class EnvData:
                     f"  {key}: SyntheticResult("
                     f"name={synth.name!r}, "
                     f"synth_id={synth.synth_id!r}, "
-                    f"success={synth.success}, "
-                    f"failure={synth.failure}"
+                    f"success={synth.success_count}, "
+                    f"failure={synth.failure_count}"
                     f")"
                 )
 
@@ -91,16 +96,11 @@ class EnvData:
         return self._errs.keys()
 
 class EnvDataFactory:
-    @classmethod
-    def from_json_file(
-        cls,
-        path: str,
+    def _envdata_factory(
+        json_config: dict,
         start: str,
-        end: str,
+        end: str
     ):
-        with open(path) as f:
-            json_config: dict = json.load(f)
-        
         # Build the Datadog config object
         env_name: str = json_config["name"]
         try:
@@ -111,29 +111,40 @@ class EnvDataFactory:
 
         # Send aggregate queries
         timerange = utils.time_utils.normalize_time(start, end)
-        queries: dict = json_config["queries"]
         err_by_type: dict[str, AggregateResult] = {}
-        for err_name, query in queries.items():
-            raw_result: int = q.query_log_count_aggregate(dd_config, query, timerange)
-            result = AggregateResult(err_name, query, raw_result)
-            err_by_type[err_name] = result
+        aggregate_queries: dict = json_config.get("aggregate_queries")
+        if aggregate_queries:
+            for err_name, query in aggregate_queries.items():
+                raw_result: int = q.query_log_count_aggregate(dd_config, query, timerange)
+                result = AggregateResult(err_name, query, raw_result)
+                err_by_type[err_name] = result
         
-        # Send synthetic querues
-        synthetics: dict = json_config["synthetic_tests"]
+        # Send synthetic queries
+        synthetic_queries: dict = json_config.get("synthetic_queries")
         synthetic_results: dict[str, SyntheticResult] = {}
-        for synth_name, synth_id in synthetics.items():
-            raw_result: list[dict] = q.query_synthetic_test(dd_config, synth_id, timerange)
-            result = SyntheticResult(synth_name, synth_id, raw_result)
-            synthetic_results[synth_name] = result
+        if synthetic_queries:
+            for synth_name, synth_id in synthetic_queries.items():
+                raw_result: list[dict] = q.query_synthetic_test(dd_config, synth_id, timerange)
+                result = SyntheticResult(synth_name, synth_id, raw_result)
+                synthetic_results[synth_name] = result
                 
         return EnvData(env_name, err_by_type, synthetic_results)
+        
+    @classmethod
+    def from_json_file(
+        cls,
+        path: str,
+        start: str,
+        end: str,
+    ) -> list[EnvData]:
+        with open(path) as f:
+            json_config: dict = json.load(f)
+        
+        env_data_series: list = []
+        if type(json_config) is list:
+            for env in json_config:
+                env_data_series.append(EnvDataFactory._envdata_factory(env, start, end))
+        else:
+            env_data_series.append(EnvDataFactory._envdata_factory(json_config, start, end))
 
-def main():
-    load_dotenv()
-    env_data = EnvDataFactory.from_json_file(ULP_QUERIES_PATH, "now-24h", "now")
-    print(env_data)
-
-    
-
-if __name__ == "__main__":
-    main()
+        return env_data_series

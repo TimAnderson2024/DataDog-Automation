@@ -5,6 +5,9 @@ from datadog_api_client.v1 import Configuration as V1Configuration
 from datadog_api_client.v1.api.metrics_api import MetricsApi as V1MetricsApi
 from datadog_api_client.v1.api.synthetics_api import SyntheticsApi, SyntheticsFetchUptimesPayload
 
+from datadog_api_client.v2.api.events_api import EventsApi
+from datadog_api_client.v2.model.events_list_request import EventsListRequest
+from datadog_api_client.v2.model.events_query_filter import EventsQueryFilter
 from datadog_api_client.v2.api.logs_api import LogsApi
 from datadog_api_client.v2.model.logs_aggregate_request import LogsAggregateRequest
 from datadog_api_client.v2.model.logs_query_filter import LogsQueryFilter
@@ -94,6 +97,31 @@ def query_metric(dd_config: V1Configuration, query_string: str, time_range: tupl
             timeseries.append(series.to_dict())
         
         return timeseries
+
+def query_events(dd_config: Configuration, query_string: str, time_range: tuple[int, int]) -> list[dict]:
+    with ApiClient(dd_config) as api_client:
+        api_instance = EventsApi(api_client)
+
+        query_body = EventsListRequest(
+            filter=EventsQueryFilter(
+                query=query_string,
+                _from=time_range[0],
+                to=time_range[1]
+            )
+        )
+
+        all_logs = []
+        while True:
+            response = api_instance.search_events(body=query_body)
+            response_data = response.data
+            response_metadata = response.meta.to_dict()
+
+            all_logs.extend(response_data)
+            if not response_metadata.get('page', None):
+                break
+            query_body.page.cursor = response_metadata['page']['after']
+
+        return all_logs 
 
 def query_synthetic_test(dd_config: Configuration, test_id: str, time_range) -> dict:
     time_from, time_to = time_range[0], time_range[1]
