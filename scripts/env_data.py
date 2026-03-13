@@ -90,6 +90,7 @@ class EnvData:
         log_results: dict[str, LogResult],
         event_results: dict[str, EventResult], 
         synthetic_results: dict[str, SyntheticResult],
+        filtered_fm_jobs: dict[str, int] = None
         ) -> EnvData:
 
         self.env = env

@@ -10,23 +10,27 @@ from datetime import date
 
 import utils.time_utils as time
 from utils.json_helpers import load_json_from_file
-from env_data import EnvDataFactory
+from env_data import EnvDataFactory, LogResult
 import utils.query as q
 
 QUERY_PATH = "config/queries.json"
 TEST_PATH = "output/test_report.txt"
 
 def report_builder():
-    data = EnvDataFactory.from_json_file(QUERY_PATH, "now-24h", "now")
+    data = EnvDataFactory.from_json_file(QUERY_PATH, "now-48h", "now")
     
     for env in data:
         print(json.dumps(env, default=str, indent=2))
     
-    with open('templates/report_2.md') as f:
+    with open('templates/report_template_v2.md') as f:
         template = Template(f.read())
 
     for env in data:
         print(env)
+
+        if env.log_results.get('failed_fm_jobs'):
+            env.filtered_fm_jobs = identify_unique_filemover_jobs(env.log_results.get('failed_fm_jobs', {}))
+            print(env.filtered_fm_jobs)
 
     output = template.render(
         date=date.today(),
@@ -41,6 +45,15 @@ def report_builder():
     print(output_path)
     return output_path
 
+def identify_unique_filemover_jobs(log_results: dict[str, LogResult]) -> set[str]:
+    unique_jobs: dict[str, int] = {}
+
+    for failed_job in log_results.raw:
+        print(failed_job['attributes']['attributes']['fm_job']['name'])
+        job_name = failed_job['attributes']['attributes']['fm_job']['name']
+        unique_jobs[job_name] = unique_jobs.get(job_name, 0) + 1
+
+    return unique_jobs
 
 def main():
     load_dotenv()

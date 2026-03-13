@@ -15,7 +15,10 @@
 - Synthetic test on `{{ result.name }}`: {{ result.failure_count }} failures in last 24hr
 {%- endfor %}
 {%- endif %}
-{%- if env.log_results is defined and env.log_results %}
-- Filemover: {{ env.log_results["failed_fm_jobs"].aggregate }} failures in last 24hr
+{%- if env.filtered_fm_jobs is defined and env.filtered_fm_jobs %}
+- Filemover failures in last 24hr:
+{%- for failed_job, count in env.filtered_fm_jobs.items() %}
+    - {{ failed_job }}: {{ count }}
+{%- endfor %}
 {%- endif %}
 {%- endfor %}
