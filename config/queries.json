@@ -49,9 +49,16 @@
         }
     },
     {
-        "name": "stg-core",
+        "name": "urif",
         "API_KEY": "DD_CORE_API_KEY",
         "APP_KEY": "DD_CORE_APP_KEY",
+        "aggregate_queries": {
+            "504": "env:(urif-prod OR urif-prod-main) status:error @http.status_code:504",
+            "502": "env:(urif-prod OR urif-prod-main) status:error @http.status_code:502"
+        },
+        "event_queries": {
+            "oom": "env:(urif-prod OR urif-prod-main) status:error (OutOfMemoryError OR \"out of memory\" OR OOM)"
+        },
         "synthetic_queries": {
             "urifinvest": "jrd-tg4-3gt"
         }
