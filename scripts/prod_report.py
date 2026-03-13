@@ -1,28 +1,25 @@
 #!/usr/bin/env python
 
-import os
 import json
-from pprint import pprint
 from dotenv import load_dotenv
-from datadog_api_client import Configuration
 from jinja2 import Template
 from datetime import date
 
-import utils.time_utils as time
-from utils.json_helpers import load_json_from_file
 from env_data import EnvDataFactory, LogResult
-import utils.query as q
 
+TIME_FROM = "now-48h"
+TIME_TO = "now"
 QUERY_PATH = "config/queries.json"
 TEST_PATH = "output/test_report.txt"
+TEMPLATE_PATH = "templates/report_template_v2.md"
 
 def report_builder():
-    data = EnvDataFactory.from_json_file(QUERY_PATH, "now-48h", "now")
+    data = EnvDataFactory.from_json_file(QUERY_PATH, TIME_FROM, TIME_TO)
     
     for env in data:
         print(json.dumps(env, default=str, indent=2))
     
-    with open('templates/report_template_v2.md') as f:
+    with open(TEMPLATE_PATH) as f:
         template = Template(f.read())
 
     for env in data:
@@ -59,7 +56,5 @@ def main():
     load_dotenv()
     report_builder()
     
-
-
 if __name__ == "__main__":
     main()

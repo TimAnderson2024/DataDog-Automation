@@ -4,13 +4,8 @@ import json
 import utils.query as q
 import utils.time_utils 
 
-from datetime import datetime
-from pathlib import Path
-from dotenv import load_dotenv
 from dataclasses import dataclass
 from datadog_api_client import Configuration
-
-ULP_QUERIES_PATH = "config/ulp_queries.json"
 
 @dataclass 
 class LogResult:
@@ -90,7 +85,6 @@ class EnvData:
         log_results: dict[str, LogResult],
         event_results: dict[str, EventResult], 
         synthetic_results: dict[str, SyntheticResult],
-        filtered_fm_jobs: dict[str, int] = None
         ) -> EnvData:
 
         self.env = env
@@ -102,6 +96,7 @@ class EnvData:
         self.log_results = log_results
         self.event_results = event_results
         self.synthetic_results = synthetic_results
+        self.filtered_fm_jobs= None
     
     def __getitem__(self, key: str) -> AggregateResult:
         return self._errs[key]
