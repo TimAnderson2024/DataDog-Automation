@@ -10,13 +10,12 @@
         "event_queries": {
             "oom": "env:ulp-prod status:error (OutOfMemoryError OR \"out of memory\" OR OOM)"
         },
-        "synthetic_queries": {
-            "allocore": "bsi-2qz-vvt"
-        },
         "log_queries": {
             "failed_fm_jobs": "kube_namespace:*ktrs run_job.sh result for job failed env:ulp-prod"
+        },
+        "synthetic_queries": {
+            "core.allocore.com": "bsi-2qz-vvt"
         }
-        
     },
     {
         "name": "cls",
@@ -61,6 +60,21 @@
         },
         "synthetic_queries": {
             "urifinvest": "jrd-tg4-3gt"
+        }
+    },
+    {
+        "name": "USALending",
+        "API_KEY": "DD_CORE_API_KEY",
+        "APP_KEY": "DD_CORE_APP_KEY",
+        "aggregate_queries": {
+            "504": "env:(usalending-prod OR usalending-prod-main) status:error @http.status_code:504",
+            "502": "env:(usalending-prod OR usalending-prod-main) status:error @http.status_code:502"
+        },
+        "event_queries": {
+            "oom": "env:(usalending-prod OR usalending-prod-main) status:error (OutOfMemoryError OR \"out of memory\" OR OOM)"
+        },
+        "synthetic_queries": {
+            "usalending": "fnp-uqa-mx7"
         }
     }
 ]
