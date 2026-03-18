@@ -7,7 +7,7 @@ from datetime import date
 
 from env_data import EnvDataFactory, LogResult
 
-TIME_FROM = "now-48h"
+TIME_FROM = "now-24h"
 TIME_TO = "now"
 QUERY_PATH = "config/queries.json"
 TEST_PATH = "output/test_report.txt"

@@ -76,5 +76,17 @@
         "synthetic_queries": {
             "usalending": "fnp-uqa-mx7"
         }
+    },
+    {
+        "name": "ACE Services",
+        "API_KEY": "ACE_API_KEY",
+        "APP_KEY": "ACE_APP_KEY",
+        "aggregate_queries": {
+            "504": "env:ace-prod status:error @http.status_code:504",
+            "502": "env:ace-prod status:error @http.status_code:502"
+        },
+        "event_queries": {
+            "oom": "env:ace-prod status:error (OutOfMemoryError OR \"out of memory\" OR OOM)"
+        }
     }
 ]
