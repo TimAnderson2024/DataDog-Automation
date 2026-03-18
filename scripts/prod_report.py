@@ -1,25 +1,43 @@
 #!/usr/bin/env python
 
 import json
+from dataclasses import dataclass
 from dotenv import load_dotenv
 from jinja2 import Template
 from datetime import date
-
+from pathlib import Path
 from env_data import EnvDataFactory, LogResult
 
-TIME_FROM = "now-24h"
-TIME_TO = "now"
-QUERY_PATH = "config/queries.json"
-TEST_PATH = "output/test_report.txt"
-TEMPLATE_PATH = "templates/report_template_v2.md"
+CONFIG_PATH = Path("config/config.json")
+
+@dataclass
+class AppConfig:
+    time_from: str
+    time_to: str
+    query_path: Path
+    output_path: Path
+    template_path: Path
+
+def load_config(path: str = "config.json") -> AppConfig:
+    with open(path, "r") as f:
+        data = json.load(f)
+
+    return AppConfig(
+        time_from=data["TIME_FROM"],
+        time_to=data["TIME_TO"],
+        query_path=Path(data["QUERY_PATH"]),
+        output_path=Path(data["OUTPUT_PATH"]),  
+        template_path=Path(data["TEMPLATE_PATH"])
+    )
 
 def report_builder():
-    data = EnvDataFactory.from_json_file(QUERY_PATH, TIME_FROM, TIME_TO)
-    
+    config = load_config(CONFIG_PATH)
+    data = EnvDataFactory.from_json_file(config.query_path, config.time_from, config.time_to)
+
     for env in data:
         print(json.dumps(env, default=str, indent=2))
     
-    with open(TEMPLATE_PATH) as f:
+    with open(config.template_path) as f:
         template = Template(f.read())
 
     for env in data:
@@ -34,7 +52,7 @@ def report_builder():
         data=data
     )
 
-    output_path = f"{TEST_PATH} Business Day Infra Report {date.today()}.md"
+    output_path = f"{config.output_path} Business Day Infra Report {date.today()}.md"
 
     with open(output_path, 'w') as out_f:
         out_f.write(output)

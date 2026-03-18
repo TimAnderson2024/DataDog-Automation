@@ -1,0 +1,7 @@
+{
+    "TIME_FROM": "now-24h",
+    "TIME_TO": "now",
+    "QUERY_PATH": "config/queries.json",
+    "OUTPUT_PATH": "output/infra_report.txt",
+    "TEMPLATE_PATH": "templates/report_template_v2.md"
+}
