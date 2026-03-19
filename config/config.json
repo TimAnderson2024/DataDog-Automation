@@ -3,5 +3,6 @@
     "TIME_TO": "now",
     "QUERY_PATH": "config/queries.json",
     "OUTPUT_PATH": "output/infra_report.txt",
-    "TEMPLATE_PATH": "templates/report_template_v2.md"
+    "TEMPLATE_PATH": "templates/slack_template.md",
+    "OUTPUT_CHANNEL_ID": "C0ALY9QJ30T"
 }

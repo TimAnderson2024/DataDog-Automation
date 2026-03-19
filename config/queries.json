@@ -1,6 +1,6 @@
 [
     {
-        "name": "ulp",
+        "name": "ULP",
         "API_KEY": "DD_ULP_API_KEY",
         "APP_KEY": "DD_ULP_APP_KEY",
         "aggregate_queries": {
@@ -18,7 +18,7 @@
         }
     },
     {
-        "name": "cls",
+        "name": "CLS",
         "API_KEY": "DD_ULP_API_KEY",
         "APP_KEY": "DD_ULP_APP_KEY",
         "aggregate_queries": {
@@ -33,7 +33,7 @@
         }
     },
     {
-        "name": "los",
+        "name": "LOS",
         "API_KEY": "DD_LOS_API_KEY",
         "APP_KEY": "DD_LOS_APP_KEY",
         "aggregate_queries": {
@@ -48,7 +48,7 @@
         }
     },
     {
-        "name": "urif",
+        "name": "URIF",
         "API_KEY": "DD_CORE_API_KEY",
         "APP_KEY": "DD_CORE_APP_KEY",
         "aggregate_queries": {
