@@ -7,24 +7,31 @@ import utils.time_utils
 from dataclasses import dataclass
 from datadog_api_client import Configuration
 
-@dataclass 
 class LogResult:
     name: str
     query: str
     raw: list[dict]
     aggregate: int 
+    threshold: int
 
-    def __init__(self, name: str, query: str, raw: list[dict]):
+    def __init__(self, env_data: EnvData, name: str, query: str, threshold: int):
         self.name = name
         self.query = query
-        self.raw = raw
-        self.aggregate = len(raw)
+        self.threshold = threshold
+        self.raw = q.query_logs(env_data.dd_config, query, env_data.timerange)
+        self.aggregate = len(self.raw)
 
-@dataclass 
 class AggregateResult:
     name: str
     query: str
     aggregate: int
+    threshold: int
+
+    def __init__(self, env_data: EnvData, name: str, query: str, threshold: int):
+        self.name = name
+        self.query = query
+        self.threshold = threshold
+        self.aggregate = q.query_log_count_aggregate(env_data.dd_config, query, env_data.timerange)
 
     def __repr__(self) -> str:
         query_preview = (
@@ -46,13 +53,14 @@ class SyntheticResult:
     success_count: int
     has_failures: bool
 
-    def __init__(self, name, synth_id, query_logs):
+    def __init__(self, env_data: EnvData, name: str, query: str, threshold: int):
         self.name = name
-        self.synth_id = synth_id
-        self.logs = query_logs
+        self.synth_id = query
+        self.threshold = threshold 
+        self.logs = q.query_synthetic_test(env_data.dd_config, query, env_data.timerange)
 
         success, failure = 0, 0 
-        for test in query_logs:
+        for test in self.logs:
             if test["result"]["passed"]:
                 success += 1
             else:
@@ -70,38 +78,52 @@ class EventResult:
     event_list: list
     aggregate: int
 
-    def __init__(self, name: str, query: str, result: list) -> EventResult:
+    def __init__(self, env_data: EnvData, name: str, query: str, threshold: int) -> EventResult:
         self.name = name
         self.query = query
-        self.event_list = result
-        self.aggregate = len(result)
+        self.event_list = q.query_events(env_data.dd_config, query, env_data.timerange)
+        self.aggregate = len(self.event_list)
+        self.threshold = threshold
 
 
 class EnvData:
+    env: str
+    dd_config: Configuration
+    _errs: dict[str, AggregateResult]
+    log_results: dict[str, LogResult]
+    event_results: dict[str, EventResult]
+    synthetic_results: dict[str, SyntheticResult]
+    
     def __init__(
         self, 
-        env: str, 
-        err_by_type: dict[str, AggregateResult], 
-        log_results: dict[str, LogResult],
-        event_results: dict[str, EventResult], 
-        synthetic_results: dict[str, SyntheticResult],
-        thresholds: dict[str, int] = None
+        json_config: dict,
+        start: str,
+        end: str,
         ) -> EnvData:
 
-        self.env = env
-        self._errs = err_by_type
+        self.env = json_config["name"]
+        self.timerange = utils.time_utils.normalize_time(start, end)
+        self._errs = {}
+        self.log_results = {}
+        self.event_results = {}
+        self.synthetic_results = {}
 
-        for err_type, result in err_by_type.items():
-            setattr(self, err_type, result)
-        
-        for threshold_name, threshold_value in thresholds.items():
-            setattr(self, threshold_name, threshold_value)
+        try:
+            self.dd_config = q.get_dd_config(json_config["API_KEY"], json_config["APP_KEY"])
+        except Exception as e:
+            print(f"Failed to create EnvData for {self.env} due to missing API or APP key")
+            sys.exit(1)
 
-        self.log_results = log_results
-        self.event_results = event_results
-        self.synthetic_results = synthetic_results
-        self.filtered_fm_jobs= None
-    
+    def add_result(self, result):
+        if isinstance(result, AggregateResult):
+            self._errs[result.name] = result
+        elif isinstance(result, LogResult):
+            self.log_results[result.name] = result
+        elif isinstance(result, EventResult):
+            self.event_results[result.name] = result
+        elif isinstance(result, SyntheticResult):
+            self.synthetic_results[result.name] = result
+
     def __getitem__(self, key: str) -> AggregateResult:
         return self._errs[key]
     
@@ -138,65 +160,38 @@ class EnvData:
     def errors(self):
         return self._errs.keys()
 
+result_factory_map = {
+    "aggregate": AggregateResult,
+    "log": LogResult,
+    "synthetic": SyntheticResult,
+    "event": EventResult
+}
+
 class EnvDataFactory:
     def _envdata_factory(
         json_config: dict,
         start: str,
         end: str
     ):
-        # Build the Datadog config object
-        env_name: str = json_config["name"]
-        try:
-            dd_config: Configuration = q.get_dd_config(json_config["API_KEY"], json_config["APP_KEY"])
-        except Exception as e:
-            print(f"Failed to create EnvData for {env_name} due to missing API or APP key")
-            sys.exit(1)
+        env_data = EnvData(json_config, start, end)
 
-        # Send aggregate queries
-        timerange = utils.time_utils.normalize_time(start, end)
-        err_by_type: dict[str, AggregateResult] = {}
-        aggregate_queries: dict = json_config.get("aggregate_queries")
-        if aggregate_queries:
-            for err_name, query in aggregate_queries.items():
-                raw_result: int = q.query_log_count_aggregate(dd_config, query, timerange)
-                result = AggregateResult(err_name, query, raw_result)
-                err_by_type[err_name] = result
-        
-        # Send log queries
-        log_queries: dict = json_config.get("log_queries")
-        log_results: dict[str, LogResult] = {}
-        if log_queries:
-            for name, query in log_queries.items():
-                raw: list[dict] = q.query_logs(dd_config, query, timerange)
-                result: LogResult = LogResult(name, query, raw)
-                log_results[name] = result
-
-        # Send event queries
-        event_queries: dict = json_config.get("event_queries")
-        event_results: dict[str, EventResult] = {}
-        if event_queries:
-            for event_name, query in event_queries.items():
-                raw = q.query_events(dd_config, query, timerange)
-                result = EventResult(event_name, query, raw)
-                event_results[event_name] = result
+        queries: dict = json_config.get("queries")
+        for query_name, query_config in queries.items():
+            query_config: dict
+            query_type = query_config.get("type")
+            query = query_config.get("query")
+            threshold = query_config.get("threshold")
             
-        # Send synthetic queries
-        synthetic_queries: dict = json_config.get("synthetic_queries")
-        synthetic_results: dict[str, SyntheticResult] = {}
-        if synthetic_queries:
-            for synth_name, synth_id in synthetic_queries.items():
-                raw_result: list[dict] = q.query_synthetic_test(dd_config, synth_id, timerange)
-                result = SyntheticResult(synth_name, synth_id, raw_result)
-                synthetic_results[synth_name] = result
+            result_class = result_factory_map.get(query_type)
+            if not result_class:
+                print(f"Unknown query type {query_type} in config for {env_data.env}")
+                continue
+            print(f"Processing {query_type} query {query} for env {env_data.env}")
 
-        # Get thresholds
-        thresholds = {
-            "err_504_threshold": json_config.get("err_504_threshold", 0),
-            "err_502_threshold": json_config.get("err_502_threshold", 0),
-            "err_oom_threshold": json_config.get("err_oom_threshold", 0)
-        }
+            new_result = result_class(env_data, query_name, query, threshold)
+            env_data.add_result(new_result)
 
-        return EnvData(env_name, err_by_type, log_results, event_results, synthetic_results, thresholds)
+        return env_data
         
     @classmethod
     def from_json_file(

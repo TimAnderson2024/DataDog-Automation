@@ -108,12 +108,12 @@ def main():
     config = load_config(CONFIG_PATH)
     report_path, data = report_builder(config)
 
-    print(f"Posting report to Slack from: {report_path}")
+"""     print(f"Posting report to Slack from: {report_path}")
     send_slack_message(
         token=os.getenv("SLACK_API_KEY"),
         channel_id=config.output_channel_id,
         data=data,
-    )
+    ) """
 
 if __name__ == "__main__":
     main()

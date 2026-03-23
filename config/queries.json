@@ -1,104 +1,152 @@
 [
-    {
-        "name": "ULP",
-        "API_KEY": "DD_ULP_API_KEY",
-        "APP_KEY": "DD_ULP_APP_KEY",
-        "aggregate_queries": {
-            "504": "env:ulp-prod status:error @http.status_code:504 service:elb",
-            "502": "env:ulp-prod status:error @http.status_code:502 service:elb"
-        },
-        "event_queries": {
-            "oom": "env:ulp-prod status:error (OutOfMemoryError OR \"out of memory\" OR OOM)"
-        },
-        "log_queries": {
-            "failed_fm_jobs": "kube_namespace:*ktrs run_job.sh result for job failed env:ulp-prod"
-        },
-        "synthetic_queries": {
-            "core.allocore.com": "bsi-2qz-vvt"
-        },
-        "err_504_threshold": 2,
-        "err_502_threshold": 2,
-        "err_oom_threshold": 2
-    },
-    {
-        "name": "CLS",
-        "API_KEY": "DD_ULP_API_KEY",
-        "APP_KEY": "DD_ULP_APP_KEY",
-        "aggregate_queries": {
-            "504": "env:cls-prod status:error @http.status_code:504 service:elb",
-            "502": "env:cls-prod status:error @http.status_code:502 service:elb"
-        },
-        "event_queries": {
-            "oom": "env:cls-prod status:error (OutOfMemoryError OR \"out of memory\" OR OOM)"
-        },
-        "log_queries": {
-            "failed_fm_jobs": "kube_namespace:*ktrs run_job.sh result for job failed env:cls-prod"
-        },
-        "err_504_threshold": 2,
-        "err_502_threshold": 2,
-        "err_oom_threshold": 2
-    },
-    {
-        "name": "LOS",
-        "API_KEY": "DD_LOS_API_KEY",
-        "APP_KEY": "DD_LOS_APP_KEY",
-        "aggregate_queries": {
-            "504": "env:prod status:error @http.status_code:504",
-            "502": "env:prod status:error @http.status_code:502"
-        },
-        "event_queries": {
-            "oom": "env:prod status:error (OutOfMemoryError OR \"out of memory\" OR OOM)"
-        },
-        "log_queries": {
-            "failed_fm_jobs": "kube_namespace:*ktrs run_job.sh result for job failed env:los-prod"
-        },
-        "err_504_threshold": 2,
-        "err_502_threshold": 2,
-        "err_oom_threshold": 2
-    },
-    {
-        "name": "URIF",
-        "API_KEY": "DD_CORE_API_KEY",
-        "APP_KEY": "DD_CORE_APP_KEY",
-        "aggregate_queries": {
-            "504": "env:(urif-prod OR urif-prod-main) status:error @http.status_code:504",
-            "502": "env:(urif-prod OR urif-prod-main) status:error @http.status_code:502"
-        },
-        "event_queries": {
-            "oom": "env:(urif-prod OR urif-prod-main) status:error (OutOfMemoryError OR \"out of memory\" OR OOM)"
-        },
-        "synthetic_queries": {
-            "urifinvest": "jrd-tg4-3gt"
-        },
-        "err_504_threshold": 2,
-        "err_502_threshold": 2,
-        "err_oom_threshold": 2
-    },
-    {
-        "name": "USALending",
-        "API_KEY": "DD_CORE_API_KEY",
-        "APP_KEY": "DD_CORE_APP_KEY",
-        "aggregate_queries": {
-            "504": "env:(usalending-prod OR usalending-prod-main) status:error @http.status_code:504",
-            "502": "env:(usalending-prod OR usalending-prod-main) status:error @http.status_code:502"
-        },
-        "event_queries": {
-            "oom": "env:(usalending-prod OR usalending-prod-main) status:error (OutOfMemoryError OR \"out of memory\" OR OOM)"
-        },
-        "synthetic_queries": {
-            "usalending": "fnp-uqa-mx7"
-        }
-    },
-    {
-        "name": "ACE Services",
-        "API_KEY": "ACE_API_KEY",
-        "APP_KEY": "ACE_APP_KEY",
-        "aggregate_queries": {
-            "504": "env:ace-prod status:error @http.status_code:504",
-            "502": "env:ace-prod status:error @http.status_code:502"
-        },
-        "event_queries": {
-            "oom": "env:ace-prod status:error (OutOfMemoryError OR \"out of memory\" OR OOM)"
-        }
+  {
+    "name": "ULP",
+    "API_KEY": "DD_ULP_API_KEY",
+    "APP_KEY": "DD_ULP_APP_KEY",
+    "queries": {
+      "504": {
+        "type": "aggregate",
+        "query": "env:ulp-prod status:error @http.status_code:504 service:elb",
+        "threshold": 2
+      },
+      "502": {
+        "type": "aggregate",
+        "query": "env:ulp-prod status:error @http.status_code:502 service:elb",
+        "threshold": 2
+      },
+      "oom": {
+        "type": "event",
+        "query": "env:ulp-prod status:error (OutOfMemoryError OR \"out of memory\" OR OOM)",
+        "threshold": 2
+      },
+      "failed_fm_jobs": {
+        "type": "log",
+        "query": "kube_namespace:*ktrs run_job.sh result for job failed env:ulp-prod"
+      },
+      "core.allocore.com": {
+        "type": "synthetic",
+        "query": "bsi-2qz-vvt"
+      }
     }
+  },
+  {
+    "name": "CLS",
+    "API_KEY": "DD_ULP_API_KEY",
+    "APP_KEY": "DD_ULP_APP_KEY",
+    "queries": {
+      "504": {
+        "type": "aggregate",
+        "query": "env:cls-prod status:error @http.status_code:504 service:elb",
+        "threshold": 2
+      },
+      "502": {
+        "type": "aggregate",
+        "query": "env:cls-prod status:error @http.status_code:502 service:elb",
+        "threshold": 2
+      },
+      "oom": {
+        "type": "event",
+        "query": "env:cls-prod status:error (OutOfMemoryError OR \"out of memory\" OR OOM)",
+        "threshold": 2
+      },
+      "failed_fm_jobs": {
+        "type": "log",
+        "query": "kube_namespace:*ktrs run_job.sh result for job failed env:cls-prod"
+      }
+    }
+  },
+  {
+    "name": "LOS",
+    "API_KEY": "DD_LOS_API_KEY",
+    "APP_KEY": "DD_LOS_APP_KEY",
+    "queries": {
+      "504": {
+        "type": "aggregate",
+        "query": "env:prod status:error @http.status_code:504",
+        "threshold": 2
+      },
+      "502": {
+        "type": "aggregate",
+        "query": "env:prod status:error @http.status_code:502",
+        "threshold": 2
+      },
+      "oom": {
+        "type": "event",
+        "query": "env:prod status:error (OutOfMemoryError OR \"out of memory\" OR OOM)",
+        "threshold": 2
+      },
+      "failed_fm_jobs": {
+        "type": "log",
+        "query": "kube_namespace:*ktrs run_job.sh result for job failed env:los-prod"
+      }
+    }
+  },
+  {
+    "name": "URIF",
+    "API_KEY": "DD_CORE_API_KEY",
+    "APP_KEY": "DD_CORE_APP_KEY",
+    "queries": {
+      "504": {
+        "type": "aggregate",
+        "query": "env:(urif-prod OR urif-prod-main) status:error @http.status_code:504",
+        "threshold": 2
+      },
+      "502": {
+        "type": "aggregate",
+        "query": "env:(urif-prod OR urif-prod-main) status:error @http.status_code:502",
+        "threshold": 2
+      },
+      "oom": {
+        "type": "event",
+        "query": "env:(urif-prod OR urif-prod-main) status:error (OutOfMemoryError OR \"out of memory\" OR OOM)",
+        "threshold": 2
+      },
+      "urifinvest": {
+        "type": "synthetic",
+        "query": "jrd-tg4-3gt"
+      }
+    }
+  },
+  {
+    "name": "USALending",
+    "API_KEY": "DD_CORE_API_KEY",
+    "APP_KEY": "DD_CORE_APP_KEY",
+    "queries": {
+      "504": {
+        "type": "aggregate",
+        "query": "env:(usalending-prod OR usalending-prod-main) status:error @http.status_code:504"
+      },
+      "502": {
+        "type": "aggregate",
+        "query": "env:(usalending-prod OR usalending-prod-main) status:error @http.status_code:502"
+      },
+      "oom": {
+        "type": "event",
+        "query": "env:(usalending-prod OR usalending-prod-main) status:error (OutOfMemoryError OR \"out of memory\" OR OOM)"
+      },
+      "usalending": {
+        "type": "synthetic",
+        "query": "fnp-uqa-mx7"
+      }
+    }
+  },
+  {
+    "name": "ACE Services",
+    "API_KEY": "ACE_API_KEY",
+    "APP_KEY": "ACE_APP_KEY",
+    "queries": {
+      "504": {
+        "type": "aggregate",
+        "query": "env:ace-prod status:error @http.status_code:504"
+      },
+      "502": {
+        "type": "aggregate",
+        "query": "env:ace-prod status:error @http.status_code:502"
+      },
+      "oom": {
+        "type": "event",
+        "query": "env:ace-prod status:error (OutOfMemoryError OR \"out of memory\" OR OOM)"
+      }
+    }
+  }
 ]
