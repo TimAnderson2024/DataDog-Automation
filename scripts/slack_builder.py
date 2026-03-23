@@ -32,12 +32,17 @@ def build_dashboard_slack_blocks(data: list) -> list[dict]:
         err_504 = get_aggregate(getattr(env, "_errs", None), "504")
         err_502 = get_aggregate(getattr(env, "_errs", None), "502")
         err_oom = get_aggregate(getattr(env, "_errs", None), "oom")
+        threshold_504 = getattr(env, "err_504_threshold", 0)
+        threshold_502 = getattr(env, "err_502_threshold", 0)
+        threshold_oom = getattr(env, "err_oom_threshold", 0)
         fm_jobs = getattr(env, "filtered_fm_jobs", {}) or {}
 
         total_fm_failures = sum(fm_jobs.values())
 
-        if err_504 or err_502 or err_oom or total_fm_failures:
+        if err_504 > threshold_504 or err_502 > threshold_502 or err_oom > threshold_oom or total_fm_failures:
             return "🔴"
+        elif err_504 <= threshold_504 and err_502 <= threshold_502 and err_oom <= threshold_oom:
+            return "🟡"
         return "🟢"
 
     def build_summary_line(env) -> str:
@@ -45,14 +50,17 @@ def build_dashboard_slack_blocks(data: list) -> list[dict]:
         err_504 = get_aggregate(getattr(env, "_errs", None), "504")
         err_502 = get_aggregate(getattr(env, "_errs", None), "502")
         err_oom = get_aggregate(getattr(env, "_errs", None), "oom")
+        threshold_504 = getattr(env, "err_504_threshold", 0)
+        threshold_502 = getattr(env, "err_502_threshold", 0)
+        threshold_oom = getattr(env, "err_oom_threshold", 0)
         fm_jobs = getattr(env, "filtered_fm_jobs", {}) or {}
 
         parts = []
-        if err_504:
+        if err_504 >= threshold_504:
             parts.append(f"504: {err_504}")
-        if err_502:
+        if err_502 >= threshold_502:
             parts.append(f"502: {err_502}")
-        if err_oom:
+        if err_oom >= threshold_oom:
             parts.append(f"oom: {err_oom}")
 
         total_fm_failures = sum(fm_jobs.values())

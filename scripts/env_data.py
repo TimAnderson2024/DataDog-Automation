@@ -85,6 +85,7 @@ class EnvData:
         log_results: dict[str, LogResult],
         event_results: dict[str, EventResult], 
         synthetic_results: dict[str, SyntheticResult],
+        thresholds: dict[str, int] = None
         ) -> EnvData:
 
         self.env = env
@@ -92,6 +93,9 @@ class EnvData:
 
         for err_type, result in err_by_type.items():
             setattr(self, err_type, result)
+        
+        for threshold_name, threshold_value in thresholds.items():
+            setattr(self, threshold_name, threshold_value)
 
         self.log_results = log_results
         self.event_results = event_results
@@ -184,8 +188,15 @@ class EnvDataFactory:
                 raw_result: list[dict] = q.query_synthetic_test(dd_config, synth_id, timerange)
                 result = SyntheticResult(synth_name, synth_id, raw_result)
                 synthetic_results[synth_name] = result
-                
-        return EnvData(env_name, err_by_type, log_results, event_results, synthetic_results)
+
+        # Get thresholds
+        thresholds = {
+            "err_504_threshold": json_config.get("err_504_threshold", 0),
+            "err_502_threshold": json_config.get("err_502_threshold", 0),
+            "err_oom_threshold": json_config.get("err_oom_threshold", 0)
+        }
+
+        return EnvData(env_name, err_by_type, log_results, event_results, synthetic_results, thresholds)
         
     @classmethod
     def from_json_file(

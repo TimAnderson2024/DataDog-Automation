@@ -15,7 +15,10 @@
         },
         "synthetic_queries": {
             "core.allocore.com": "bsi-2qz-vvt"
-        }
+        },
+        "err_504_threshold": 2,
+        "err_502_threshold": 2,
+        "err_oom_threshold": 2
     },
     {
         "name": "CLS",
@@ -30,7 +33,10 @@
         },
         "log_queries": {
             "failed_fm_jobs": "kube_namespace:*ktrs run_job.sh result for job failed env:cls-prod"
-        }
+        },
+        "err_504_threshold": 2,
+        "err_502_threshold": 2,
+        "err_oom_threshold": 2
     },
     {
         "name": "LOS",
@@ -45,7 +51,10 @@
         },
         "log_queries": {
             "failed_fm_jobs": "kube_namespace:*ktrs run_job.sh result for job failed env:los-prod"
-        }
+        },
+        "err_504_threshold": 2,
+        "err_502_threshold": 2,
+        "err_oom_threshold": 2
     },
     {
         "name": "URIF",
@@ -60,7 +69,10 @@
         },
         "synthetic_queries": {
             "urifinvest": "jrd-tg4-3gt"
-        }
+        },
+        "err_504_threshold": 2,
+        "err_502_threshold": 2,
+        "err_oom_threshold": 2
     },
     {
         "name": "USALending",
