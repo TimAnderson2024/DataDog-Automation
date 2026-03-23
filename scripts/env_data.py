@@ -12,12 +12,14 @@ class LogResult:
     query: str
     raw: list[dict]
     aggregate: int 
-    threshold: int
+    yellow_threshold: int
+    red_threshold: int
 
-    def __init__(self, env_data: EnvData, name: str, query: str, threshold: int):
+    def __init__(self, env_data: EnvData, name: str, query: str, yellow_threshold: int, red_threshold: int):
         self.name = name
         self.query = query
-        self.threshold = threshold
+        self.yellow_threshold = yellow_threshold
+        self.red_threshold = red_threshold
         self.raw = q.query_logs(env_data.dd_config, query, env_data.timerange)
         self.aggregate = len(self.raw)
 
@@ -25,12 +27,14 @@ class AggregateResult:
     name: str
     query: str
     aggregate: int
-    threshold: int
+    yellow_threshold: int
+    red_threshold: int
 
-    def __init__(self, env_data: EnvData, name: str, query: str, threshold: int):
+    def __init__(self, env_data: EnvData, name: str, query: str, yellow_threshold: int, red_threshold: int):
         self.name = name
         self.query = query
-        self.threshold = threshold
+        self.yellow_threshold = yellow_threshold
+        self.red_threshold = red_threshold
         self.aggregate = q.query_log_count_aggregate(env_data.dd_config, query, env_data.timerange)
 
     def __repr__(self) -> str:
@@ -52,11 +56,14 @@ class SyntheticResult:
     failure_count: int
     success_count: int
     has_failures: bool
+    yellow_threshold: int
+    red_threshold: int
 
-    def __init__(self, env_data: EnvData, name: str, query: str, threshold: int):
+    def __init__(self, env_data: EnvData, name: str, query: str, yellow_threshold: int, red_threshold: int):
         self.name = name
         self.synth_id = query
-        self.threshold = threshold 
+        self.yellow_threshold = yellow_threshold 
+        self.red_threshold = red_threshold
         self.logs = q.query_synthetic_test(env_data.dd_config, query, env_data.timerange)
 
         success, failure = 0, 0 
@@ -71,20 +78,21 @@ class SyntheticResult:
         if failure != 0:
             self.has_failures = True
 
-@dataclass
 class EventResult:
     name: str
     query: str
     event_list: list
     aggregate: int
+    yellow_threshold: int
+    red_threshold: int
 
-    def __init__(self, env_data: EnvData, name: str, query: str, threshold: int) -> EventResult:
+    def __init__(self, env_data: EnvData, name: str, query: str, yellow_threshold: int, red_threshold: int) -> EventResult:
         self.name = name
         self.query = query
         self.event_list = q.query_events(env_data.dd_config, query, env_data.timerange)
         self.aggregate = len(self.event_list)
-        self.threshold = threshold
-
+        self.yellow_threshold = yellow_threshold
+        self.red_threshold = red_threshold
 
 class EnvData:
     env: str
@@ -180,7 +188,8 @@ class EnvDataFactory:
             query_config: dict
             query_type = query_config.get("type")
             query = query_config.get("query")
-            threshold = query_config.get("threshold")
+            red_threshold = query_config.get("red_threshold")
+            yellow_threshold = query_config.get("yellow_threshold", red_threshold)
             
             result_class = result_factory_map.get(query_type)
             if not result_class:
@@ -188,7 +197,7 @@ class EnvDataFactory:
                 continue
             print(f"Processing {query_type} query {query} for env {env_data.env}")
 
-            new_result = result_class(env_data, query_name, query, threshold)
+            new_result = result_class(env_data, query_name, query, yellow_threshold, red_threshold)
             env_data.add_result(new_result)
 
         return env_data
