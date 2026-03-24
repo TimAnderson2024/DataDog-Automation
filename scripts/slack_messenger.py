@@ -76,31 +76,64 @@ class SlackMessenger:
 
         self.message_blocks.extend(header_blocks)
 
-    def build_red_summary_line(self, env: EnvData) -> str:
-        alert_results = [f"{result.aggregate} {result.name}" for result in env.log_results.values() if result.alert_level == 2]
-        return f"🔴 *{env.env}* — " + ", ".join(alert_results)
+    
+    def build_issue_summary_line(self, env: EnvData, alert_level: int) -> str:
+        all_results = env.get_all_results()
+        alert_results = [f"{result.aggregate} {result.name}" for result in all_results.values() if result.alert_level == alert_level]
+
+        if alert_level == 2:
+            return f"🔴 *{env.env}* — " + ", ".join(alert_results)
+        return f"🟡 *{env.env}* — " + ", ".join(alert_results)     
+    
+
+    def build_healthy_summary_line(self, healthy_envs: list[EnvData]) -> str:
+        return 
+
 
     def build_summary(self):
-        summary_blocks, red_envs, yellow_envs, green_envs = [], set(), set(), set()
+        summary_blocks, green_envs, yellow_envs, red_envs = [], [], [], []
 
         for env in self.data:
+            max_level = 0
             for result_dict in [env.log_results.values(), env._errs.values(), env.synthetic_results.values(), env.event_results.values()]:
                 for result in result_dict:
-                    if result.alert_level == 2:
-                        red_envs.add(env)
-                    elif result.alert_level == 1 and env not in yellow_envs:
-                        yellow_envs.add(env)
-                    else:
-                        green_envs.add(env)
+                    print(f"Env: {env.env}, Result: {result.name}, Type: {result.type}, Aggregate: {result.aggregate}, Alert Level: {result.alert_level}")
+                    max_level = max(max_level, result.alert_level)
+            
+            levels = [green_envs, yellow_envs, red_envs]
+            levels[max_level].append(env)
     
         if red_envs:
-            red_summary_lines = [self.build_red_summary_line(env) for env in red_envs]
+            red_summary_lines = [self.build_issue_summary_line(env, 2) for env in red_envs]
             summary_blocks.append(
                 {
                     "type": "section",
                     "text": {
                         "type": "mrkdwn",
-                        "text": "*Needs attention*\n" + "\n".join(red_summary_lines),
+                        "text": "*Errors Exceed Threshold*\n" + "\n".join(red_summary_lines),
+                    },
+                }
+            )
+        
+        if yellow_envs:
+            yellow_summary_lines = [self.build_issue_summary_line(env, 1) for env in yellow_envs]
+            summary_blocks.append(
+                {
+                    "type": "section",
+                    "text": {
+                        "type": "mrkdwn",
+                        "text": "*Errors Within Threshold*\n" + "\n".join(yellow_summary_lines),
+                    },
+                }
+            )
+
+        if green_envs: 
+            summary_blocks.append(
+                {
+                    "type": "section",
+                    "text": {
+                        "type": "mrkdwn",
+                        "text": f"*Healthy*\n🟢 *{', '.join(env.env for env in green_envs)}*"
                     },
                 }
             )
