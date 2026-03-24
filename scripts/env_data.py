@@ -101,6 +101,14 @@ class EnvData:
             self.event_results[result.name] = result
         elif isinstance(result, SyntheticResult):
             self.synthetic_results[result.name] = result
+    
+    def get_all_results(self) -> dict[str, Result]:
+        all_results = {}
+        all_results.update(self._errs)
+        all_results.update(self.log_results)
+        all_results.update(self.event_results)
+        all_results.update(self.synthetic_results)
+        return all_results
 
     def __getitem__(self, key: str) -> AggregateResult:
         return self._errs[key]
