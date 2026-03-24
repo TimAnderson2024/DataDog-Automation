@@ -71,6 +71,7 @@ class EnvData:
     log_results: dict[str, LogResult]
     event_results: dict[str, EventResult]
     synthetic_results: dict[str, SyntheticResult]
+    alert_level = int
     
     def __init__(
         self, 
@@ -85,6 +86,7 @@ class EnvData:
         self.log_results = {}
         self.event_results = {}
         self.synthetic_results = {}
+        self.alert_level = 0
 
         try:
             self.dd_config = q.get_dd_config(json_config["API_KEY"], json_config["APP_KEY"])
@@ -93,6 +95,9 @@ class EnvData:
             sys.exit(1)
 
     def add_result(self, result: Result):
+        if result.alert_level > self.alert_level:
+            self.alert_level = result.alert_level
+        
         if isinstance(result, AggregateResult):
             self._errs[result.name] = result
         elif isinstance(result, LogResult):

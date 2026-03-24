@@ -1,4 +1,4 @@
-from env_data import EnvData
+from env_data import EnvData, Result
 from datetime import date
 
 from slack_sdk import WebClient
@@ -44,6 +44,7 @@ class SlackMessenger:
     def build_message(self):
         self.build_header()
         self.build_summary()
+        self.build_env_breakdowns()
     
     def build_header(self):
         header_blocks = []
@@ -84,24 +85,19 @@ class SlackMessenger:
         if alert_level == 2:
             return f"🔴 *{env.env}* — " + ", ".join(alert_results)
         return f"🟡 *{env.env}* — " + ", ".join(alert_results)     
-    
-
-    def build_healthy_summary_line(self, healthy_envs: list[EnvData]) -> str:
-        return 
 
 
     def build_summary(self):
         summary_blocks, green_envs, yellow_envs, red_envs = [], [], [], []
 
+        # Split up envs by alert level 
         for env in self.data:
-            max_level = 0
-            for result_dict in [env.log_results.values(), env._errs.values(), env.synthetic_results.values(), env.event_results.values()]:
-                for result in result_dict:
-                    print(f"Env: {env.env}, Result: {result.name}, Type: {result.type}, Aggregate: {result.aggregate}, Alert Level: {result.alert_level}")
-                    max_level = max(max_level, result.alert_level)
-            
-            levels = [green_envs, yellow_envs, red_envs]
-            levels[max_level].append(env)
+            if env.alert_level == 2:
+                red_envs.append(env)
+            elif env.alert_level == 1:
+                yellow_envs.append(env)
+            else:
+                green_envs.append(env)
     
         if red_envs:
             red_summary_lines = [self.build_issue_summary_line(env, 2) for env in red_envs]
@@ -140,3 +136,51 @@ class SlackMessenger:
         
         summary_blocks.append({"type": "divider"})
         self.message_blocks.extend(summary_blocks)
+    
+    @staticmethod
+    def get_status_icon(obj: EnvData | Result) -> str:
+        if obj.alert_level == 2:
+            return "🔴"
+        elif obj.alert_level == 1:
+            return "🟡"
+        else:
+            return "🟢"
+
+    def build_env_fields(self, env: EnvData) -> list[dict]:
+        all_results = env.get_all_results()
+
+        col_1 = ""
+        for err in ["504", "502", "oom"]:
+            col_1 = col_1 + f"*{err}:* {all_results.get(err).aggregate} \n"
+
+        synthetic_results = getattr(env, "synthetic_results", None) or {}
+        synthetic_text = "—"
+        if synthetic_results:
+            synthetic_parts = []
+            for _, result in synthetic_results.items():
+                name = getattr(result, "name", "unknown")
+                failure_count = getattr(result, "failure_count", 0)
+                icon = "✅" if failure_count == 0 else "🔴"
+                synthetic_parts.append(f"`{name}` ({failure_count}) {icon} ")
+            synthetic_text = "\n".join(synthetic_parts)
+
+        return [
+            {"type": "mrkdwn", "text": col_1},
+            {"type": "mrkdwn", "text": f"*Synthetic:*{synthetic_text}"},
+        ]
+
+    def build_env_breakdowns(self) -> list[dict]:
+        for i, env in enumerate(self.data):
+            env_block = {
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": f"{self.get_status_icon(env)} *{env.env}*"
+                },
+                "fields": self.build_env_fields(env)
+            }
+
+            self.message_blocks.append(env_block)
+
+            if i < len(self.data) - 1:
+                self.message_blocks.append({"type": "divider"})      
