@@ -7,6 +7,14 @@ import utils.time_utils
 from dataclasses import dataclass
 from datadog_api_client import Configuration
 
+def set_alert_level(result: LogResult | AggregateResult | SyntheticResult | EventResult, yellow_threshold: int, red_threshold: int):
+    if result.aggregate >= red_threshold:
+        result.alert_level = 2
+    elif result.aggregate >= yellow_threshold:
+        result.alert_level = 1
+    else:
+        result.alert_level = 0
+
 class LogResult:
     name: str
     query: str
@@ -14,6 +22,7 @@ class LogResult:
     aggregate: int 
     yellow_threshold: int
     red_threshold: int
+    alert_level: int 
 
     def __init__(self, env_data: EnvData, name: str, query: str, yellow_threshold: int, red_threshold: int):
         self.name = name
@@ -23,12 +32,20 @@ class LogResult:
         self.raw = q.query_logs(env_data.dd_config, query, env_data.timerange)
         self.aggregate = len(self.raw)
 
+        if self.aggregate >= self.red_threshold:
+            self.alert_level = 2
+        elif self.aggregate >= self.yellow_threshold:
+            self.alert_level = 1
+        else:
+            self.alert_level = 0
+
 class AggregateResult:
     name: str
     query: str
     aggregate: int
     yellow_threshold: int
     red_threshold: int
+    alert_level: int
 
     def __init__(self, env_data: EnvData, name: str, query: str, yellow_threshold: int, red_threshold: int):
         self.name = name
@@ -58,6 +75,7 @@ class SyntheticResult:
     has_failures: bool
     yellow_threshold: int
     red_threshold: int
+    alert_level: int
 
     def __init__(self, env_data: EnvData, name: str, query: str, yellow_threshold: int, red_threshold: int):
         self.name = name

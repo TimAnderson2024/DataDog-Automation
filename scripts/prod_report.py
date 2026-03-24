@@ -1,16 +1,15 @@
 #!/usr/bin/env python
 
 import json
-from dataclasses import dataclass
-from slack_builder import build_dashboard_slack_blocks
 import os
+from dataclasses import dataclass
+from slack_messenger import SlackMessenger
 from dotenv import load_dotenv
 from jinja2 import Template
 from datetime import date
 from pathlib import Path
 from env_data import EnvDataFactory, LogResult
-from slack_sdk import WebClient
-from slack_sdk.errors import SlackApiError
+
 
 CONFIG_PATH = Path("config/config.json")
 
@@ -35,34 +34,6 @@ def load_config(path: str = "config.json") -> AppConfig:
         template_path=Path(data["TEMPLATE_PATH"]),
         output_channel_id=data["OUTPUT_CHANNEL_ID"]
     )
-
-def send_slack_message(token: str, channel_id: str, data: list[dict]) -> None:
-    if not token:
-        raise ValueError("SLACK_API_KEY is not set")
-
-    if not channel_id:
-        raise ValueError("OUTPUT_CHANNEL_ID is not set")
-
-    client = WebClient(token=token)
-    channel_id = channel_id.strip()
-    blocks = build_dashboard_slack_blocks(data)
-
-    try:
-        auth_response = client.auth_test()
-        print(
-            f"Authenticated to Slack as '{auth_response['user']}' in workspace '{auth_response['team']}'"
-        )
-
-        response = client.chat_postMessage(
-            channel=channel_id,
-            blocks=blocks,
-        )
-
-        print(f"Slack message sent successfully. ts={response['ts']}")
-
-    except SlackApiError as e:
-        print(f"Slack API error: {e.response['error']}")
-        raise
 
 def report_builder(config: AppConfig) -> str:
     data = EnvDataFactory.from_json_file(config.query_path, config.time_from, config.time_to)
@@ -106,14 +77,14 @@ def identify_unique_filemover_jobs(log_results: dict[str, LogResult]) -> set[str
 def main():
     load_dotenv()
     config = load_config(CONFIG_PATH)
-    report_path, data = report_builder(config)
 
-"""     print(f"Posting report to Slack from: {report_path}")
-    send_slack_message(
-        token=os.getenv("SLACK_API_KEY"),
-        channel_id=config.output_channel_id,
-        data=data,
-    ) """
+    report_builder(config)
+
+"""     all_env_data = EnvDataFactory.from_json_file(config.query_path, config.time_from, config.time_to)
+
+    messenger = SlackMessenger(all_env_data, token=os.getenv("SLACK_API_KEY"), channel_id=config.output_channel_id)
+    messenger.build_message()
+    messenger.send_message() """
 
 if __name__ == "__main__":
     main()
