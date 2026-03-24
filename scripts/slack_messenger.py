@@ -43,6 +43,7 @@ class SlackMessenger:
     
     def build_message(self):
         self.build_header()
+        self.build_summary()
     
     def build_header(self):
         header_blocks = []
@@ -74,3 +75,35 @@ class SlackMessenger:
         )
 
         self.message_blocks.extend(header_blocks)
+
+    def build_red_summary_line(self, env: EnvData) -> str:
+        alert_results = [f"{result.aggregate} {result.name}" for result in env.log_results.values() if result.alert_level == 2]
+        return f"🔴 *{env.env}* — " + ", ".join(alert_results)
+
+    def build_summary(self):
+        summary_blocks, red_envs, yellow_envs, green_envs = [], set(), set(), set()
+
+        for env in self.data:
+            for result_dict in [env.log_results.values(), env._errs.values(), env.synthetic_results.values(), env.event_results.values()]:
+                for result in result_dict:
+                    if result.alert_level == 2:
+                        red_envs.add(env)
+                    elif result.alert_level == 1 and env not in yellow_envs:
+                        yellow_envs.add(env)
+                    else:
+                        green_envs.add(env)
+    
+        if red_envs:
+            red_summary_lines = [self.build_red_summary_line(env) for env in red_envs]
+            summary_blocks.append(
+                {
+                    "type": "section",
+                    "text": {
+                        "type": "mrkdwn",
+                        "text": "*Needs attention*\n" + "\n".join(red_summary_lines),
+                    },
+                }
+            )
+        
+        summary_blocks.append({"type": "divider"})
+        self.message_blocks.extend(summary_blocks)

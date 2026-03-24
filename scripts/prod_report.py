@@ -80,11 +80,11 @@ def main():
 
     report_builder(config)
 
-"""     all_env_data = EnvDataFactory.from_json_file(config.query_path, config.time_from, config.time_to)
+    all_env_data = EnvDataFactory.from_json_file(config.query_path, config.time_from, config.time_to)
 
     messenger = SlackMessenger(all_env_data, token=os.getenv("SLACK_API_KEY"), channel_id=config.output_channel_id)
     messenger.build_message()
-    messenger.send_message() """
+    messenger.send_message()
 
 if __name__ == "__main__":
     main()
