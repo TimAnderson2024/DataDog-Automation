@@ -78,9 +78,13 @@ def main():
     load_dotenv()
     config = load_config(CONFIG_PATH)
 
-    report_builder(config)
+    # report_builder(config)
 
     all_env_data = EnvDataFactory.from_json_file(config.query_path, config.time_from, config.time_to)
+    
+    for env in all_env_data:
+        if env.log_results.get('failed_fm_jobs'):
+            env.filtered_fm_jobs = identify_unique_filemover_jobs(env.log_results.get('failed_fm_jobs', {}))
 
     messenger = SlackMessenger(all_env_data, token=os.getenv("SLACK_API_KEY"), channel_id=config.output_channel_id)
     messenger.build_message()

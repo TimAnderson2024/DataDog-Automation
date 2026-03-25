@@ -144,7 +144,8 @@ class SlackMessenger:
 
         err_text = ""
         for err in ["504", "502", "oom"]:
-            err_text = err_text + f"*{err}:* {all_results.get(err).aggregate} \n"
+            result = all_results.get(err)
+            err_text = err_text + f"*{self.get_status_icon(result)} {err}:* {result.aggregate} \n"
         env_blocks.append({"type": "mrkdwn", "text": err_text})
 
         synthetic_results = getattr(env, "synthetic_results", None) or {}
@@ -159,6 +160,22 @@ class SlackMessenger:
             env_blocks.append({"type": "mrkdwn", "text": synthetic_text})
 
         return env_blocks
+    
+    def build_filemover_context(self, env) -> dict | None:
+        fm_jobs = getattr(env, "filtered_fm_jobs", {}) or {}
+        if not fm_jobs:
+            return None
+
+        fm_parts = [f"`{job}` ({count})" for job, count in fm_jobs.items()]
+        return {
+            "type": "context",
+            "elements": [
+                {
+                    "type": "mrkdwn",
+                    "text": "*Filemover failures:* " + ", ".join(fm_parts),
+                }
+            ],
+        }
 
     def build_env_breakdowns(self, alert_envs: dict[str, list[EnvData]]) -> list[dict]:
         for env in [*alert_envs["yellow"], *alert_envs["red"]]:
@@ -166,10 +183,14 @@ class SlackMessenger:
                 "type": "section",
                 "text": {
                     "type": "mrkdwn",
-                    "text": f"{self.get_status_icon(env)} *{env.env}*"
+                    "text": f"*{env.env}*"
                 },
                 "fields": self.build_env_fields(env)
             }
 
             self.message_blocks.append(env_block)
+            fm_context = self.build_filemover_context(env)
+            print(fm_context)
+            if fm_context:
+                self.message_blocks.append(fm_context)
             self.message_blocks.append({"type": "divider"})      
