@@ -43,8 +43,19 @@ class SlackMessenger:
     
     def build_message(self):
         self.build_header()
-        self.build_summary()
-        self.build_env_breakdowns()
+
+        # Split up envs by alert level
+        alert_envs = {"green": [], "yellow": [], "red": []}
+        for env in self.data:
+            if env.alert_level == 2:
+                alert_envs["red"].append(env)
+            elif env.alert_level == 1:
+                alert_envs["yellow"].append(env)
+            else:
+                alert_envs["green"].append(env)
+
+        self.build_summary(alert_envs)
+        self.build_env_breakdowns(alert_envs)
     
     def build_header(self):
         header_blocks = []
@@ -87,20 +98,11 @@ class SlackMessenger:
         return f"🟡 *{env.env}* — " + ", ".join(alert_results)     
 
 
-    def build_summary(self):
-        summary_blocks, green_envs, yellow_envs, red_envs = [], [], [], []
+    def build_summary(self, alert_envs: dict[str, list[EnvData]]):
+        summary_blocks = []
 
-        # Split up envs by alert level 
-        for env in self.data:
-            if env.alert_level == 2:
-                red_envs.append(env)
-            elif env.alert_level == 1:
-                yellow_envs.append(env)
-            else:
-                green_envs.append(env)
-    
-        if red_envs:
-            red_summary_lines = [self.build_issue_summary_line(env, 2) for env in red_envs]
+        if alert_envs["red"]:
+            red_summary_lines = [self.build_issue_summary_line(env, 2) for env in alert_envs["red"]    ]
             summary_blocks.append(
                 {
                     "type": "section",
@@ -111,8 +113,8 @@ class SlackMessenger:
                 }
             )
         
-        if yellow_envs:
-            yellow_summary_lines = [self.build_issue_summary_line(env, 1) for env in yellow_envs]
+        if alert_envs["yellow"]:
+            yellow_summary_lines = [self.build_issue_summary_line(env, 1) for env in alert_envs["yellow"]]
             summary_blocks.append(
                 {
                     "type": "section",
@@ -123,13 +125,13 @@ class SlackMessenger:
                 }
             )
 
-        if green_envs: 
+        if alert_envs["green"]:
             summary_blocks.append(
                 {
                     "type": "section",
                     "text": {
                         "type": "mrkdwn",
-                        "text": f"*Healthy*\n🟢 *{', '.join(env.env for env in green_envs)}*"
+                        "text": f"*Healthy*\n🟢 *{', '.join(env.env for env in alert_envs['green'])}*"
                     },
                 }
             )
@@ -169,8 +171,8 @@ class SlackMessenger:
             {"type": "mrkdwn", "text": f"*Synthetic:*{synthetic_text}"},
         ]
 
-    def build_env_breakdowns(self) -> list[dict]:
-        for i, env in enumerate(self.data):
+    def build_env_breakdowns(self, alert_envs: dict[str, list[EnvData]]) -> list[dict]:
+        for env in [*alert_envs["yellow"], *alert_envs["red"]]:
             env_block = {
                 "type": "section",
                 "text": {
@@ -181,6 +183,4 @@ class SlackMessenger:
             }
 
             self.message_blocks.append(env_block)
-
-            if i < len(self.data) - 1:
-                self.message_blocks.append({"type": "divider"})      
+            self.message_blocks.append({"type": "divider"})      
