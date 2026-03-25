@@ -24,6 +24,7 @@
       "failed_fm_jobs": {
         "type": "log",
         "query": "kube_namespace:*ktrs run_job.sh result for job failed env:ulp-prod",
+        "manual_threshold": 2, 
         "yellow_threshold": 1,
         "red_threshold": 2
       },
@@ -42,6 +43,7 @@
       "504": {
         "type": "aggregate",
         "query": "env:cls-prod status:error @http.status_code:504 service:elb",
+        "manual_threshold": 1, 
         "yellow_threshold": 2,
         "red_threshold": 5
       },
@@ -60,6 +62,7 @@
       "failed_fm_jobs": {
         "type": "log",
         "query": "kube_namespace:*ktrs run_job.sh result for job failed env:cls-prod",
+        "manual_threshold": 2,
         "yellow_threshold": 1,
         "red_threshold": 2
       }
@@ -73,6 +76,7 @@
       "504": {
         "type": "aggregate",
         "query": "env:prod status:error @http.status_code:504",
+        "manual_threshold": 7, 
         "yellow_threshold": 1,
         "red_threshold": 6
       },
@@ -91,6 +95,7 @@
       "failed_fm_jobs": {
         "type": "log",
         "query": "kube_namespace:*ktrs run_job.sh result for job failed env:los-prod",
+        "manual_threshold": 1, 
         "yellow_threshold": 1,
         "red_threshold": 2
       }

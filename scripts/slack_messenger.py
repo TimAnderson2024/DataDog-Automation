@@ -54,7 +54,9 @@ class SlackMessenger:
             else:
                 alert_envs["green"].append(env)
 
-        self.build_summary(alert_envs)
+        # Get manual review results
+        manual_review_envs = [env for env in self.data if getattr(env, "manual_review", False)]
+        self.build_summary(alert_envs, manual_review_envs)
         self.build_env_breakdowns(alert_envs)
     
     def build_header(self):
@@ -98,30 +100,18 @@ class SlackMessenger:
         return f"🟡 *{env.env}* — " + ", ".join(alert_results)     
 
 
-    def build_summary(self, alert_envs: dict[str, list[EnvData]]):
+    def build_summary(self, alert_envs: dict[str, list[EnvData]], manual_review_envs: list[EnvData]):
         summary_blocks = []
 
-        if alert_envs["red"]:
-            red_summary_lines = [self.build_issue_summary_line(env, 2) for env in alert_envs["red"]    ]
+        if manual_review_envs:
+            manual_review_lines = [f"🔎 *{env.env}* — {', '.join(f'{result.name} ({result.aggregate})' for result in env.get_manual_review_results().values())}" for env in manual_review_envs]
             summary_blocks.append(
                 {
                     "type": "section",
                     "text": {
                         "type": "mrkdwn",
-                        "text": "*Errors Exceed Threshold*\n" + "\n".join(red_summary_lines),
-                    },
-                }
-            )
-        
-        if alert_envs["yellow"]:
-            yellow_summary_lines = [self.build_issue_summary_line(env, 1) for env in alert_envs["yellow"]]
-            summary_blocks.append(
-                {
-                    "type": "section",
-                    "text": {
-                        "type": "mrkdwn",
-                        "text": "*Errors Within Threshold*\n" + "\n".join(yellow_summary_lines),
-                    },
+                        "text": "*Manual Review*\n" + "\n".join(manual_review_lines),
+                    }
                 }
             )
 
