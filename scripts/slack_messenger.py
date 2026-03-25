@@ -139,27 +139,26 @@ class SlackMessenger:
             return "🟢"
 
     def build_env_fields(self, env: EnvData) -> list[dict]:
+        env_blocks = []
         all_results = env.get_all_results()
 
-        col_1 = ""
+        err_text = ""
         for err in ["504", "502", "oom"]:
-            col_1 = col_1 + f"*{err}:* {all_results.get(err).aggregate} \n"
+            err_text = err_text + f"*{err}:* {all_results.get(err).aggregate} \n"
+        env_blocks.append({"type": "mrkdwn", "text": err_text})
 
         synthetic_results = getattr(env, "synthetic_results", None) or {}
-        synthetic_text = "—"
-        if synthetic_results:
+        if synthetic_results and len(synthetic_results.values()) > 0:
             synthetic_parts = []
             for _, result in synthetic_results.items():
                 name = getattr(result, "name", "unknown")
                 failure_count = getattr(result, "failure_count", 0)
                 icon = "✅" if failure_count == 0 else "🔴"
                 synthetic_parts.append(f"`{name}` ({failure_count}) {icon} ")
-            synthetic_text = "\n".join(synthetic_parts)
+            synthetic_text = "*Synthetic:* " + "\n".join(synthetic_parts)
+            env_blocks.append({"type": "mrkdwn", "text": synthetic_text})
 
-        return [
-            {"type": "mrkdwn", "text": col_1},
-            {"type": "mrkdwn", "text": f"*Synthetic:*{synthetic_text}"},
-        ]
+        return env_blocks
 
     def build_env_breakdowns(self, alert_envs: dict[str, list[EnvData]]) -> list[dict]:
         for env in [*alert_envs["yellow"], *alert_envs["red"]]:
