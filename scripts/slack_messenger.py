@@ -146,6 +146,9 @@ class SlackMessenger:
         for err in ["504", "502", "oom"]:
             result = all_results.get(err)
             err_text = err_text + f"*{self.get_status_icon(result)} {err}:* {result.aggregate} \n"
+        if all_results.get("503").aggregate > 0:
+            result = all_results.get("503")
+            err_text = err_text + f"*{self.get_status_icon(result)} 503:* {result.aggregate} \n"
         env_blocks.append({"type": "mrkdwn", "text": err_text})
 
         synthetic_results = getattr(env, "synthetic_results", None) or {}
