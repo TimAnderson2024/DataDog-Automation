@@ -121,7 +121,7 @@ class SlackMessenger:
                     "type": "section",
                     "text": {
                         "type": "mrkdwn",
-                        "text": f"*Healthy*\n🟢 *{', '.join(env.env for env in alert_envs['green'])}*"
+                        "text": f"*No Errors:*\n🟢 *{', '.join(env.env for env in alert_envs['green'])}*"
                     },
                 }
             )

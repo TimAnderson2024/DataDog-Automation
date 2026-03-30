@@ -182,11 +182,16 @@
         "type": "synthetic",
         "query": "fnp-uqa-mx7",
         "red_threshold": 1
+      },
+      "allocore.com": {
+      "type": "synthetic",
+      "query": "z5e-tbg-j4r",
+      "red_threshold": 1
       }
     }
   },
   {
-    "name": "ACE Services",
+    "name": "ACE",
     "API_KEY": "ACE_API_KEY",
     "APP_KEY": "ACE_APP_KEY",
     "queries": {
