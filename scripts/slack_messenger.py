@@ -151,14 +151,12 @@ class SlackMessenger:
             err_text = err_text + f"*{self.get_status_icon(result)} 503:* {result.aggregate} \n"
         env_blocks.append({"type": "mrkdwn", "text": err_text})
 
-        synthetic_results = getattr(env, "synthetic_results", None) or {}
+        synthetic_results = env.synthetic_results
         if synthetic_results and len(synthetic_results.values()) > 0:
             synthetic_parts = []
             for _, result in synthetic_results.items():
-                name = getattr(result, "name", "unknown")
-                failure_count = getattr(result, "failure_count", 0)
-                icon = "✅" if failure_count == 0 else "🔴"
-                synthetic_parts.append(f"`{name}` ({failure_count}) {icon} ")
+                icon = "✅" if result.aggregate == 0 else "🔴"
+                synthetic_parts.append(f"`{result.name}` ({result.aggregate}) {icon} ")
             synthetic_text = "*Synthetic:* " + "\n".join(synthetic_parts)
             env_blocks.append({"type": "mrkdwn", "text": synthetic_text})
 

@@ -2,10 +2,10 @@ import sys
 import json
 
 import utils.query as q
-import utils.time_utils 
+import utils.time_utils
 
-from dataclasses import dataclass
 from datadog_api_client import Configuration
+
 
 class Result:
     name: str
@@ -18,10 +18,20 @@ class Result:
     alert_level: int
     manual_review: bool
 
-    def __init__(self, name: str, query: str, result_type: str, raw: int | list[dict], aggregate: int, yellow_threshold: int, red_threshold: int, manual_threshold: int):
+    def __init__(
+        self,
+        name: str,
+        query: str,
+        type: str,
+        raw: int | list[dict],
+        aggregate: int,
+        yellow_threshold: int,
+        red_threshold: int,
+        manual_threshold: int,
+    ):
         self.name = name
         self.query = query
-        self.type = result_type
+        self.type = type
         self.raw = raw
         self.aggregate = aggregate
         self.yellow_threshold = yellow_threshold
@@ -39,53 +49,23 @@ class Result:
         else:
             self.manual_review = False
 
-class AggregateResult(Result):
-    def __init__(self, name: str, query: str, aggregate: int, yellow_threshold: int, red_threshold: int, manual_threshold: int):
-        super().__init__(name, query, "aggregate", aggregate, aggregate, yellow_threshold, red_threshold, manual_threshold)
-
-
-class LogResult(Result):
-    raw: list[dict]
-
-    def __init__(self, name: str, query: str, raw: list[dict], yellow_threshold: int, red_threshold: int, manual_threshold: int):
-        super().__init__(name, query, "log", raw, len(raw), yellow_threshold, red_threshold, manual_threshold)
-
-
-class EventResult(Result):
-    raw: list[dict]
-    
-    def __init__(self, name: str, query: str, raw: list[dict], yellow_threshold: int, red_threshold: int, manual_threshold: int):
-        super().__init__(name, query, "event", raw, len(raw), yellow_threshold, red_threshold, manual_threshold)
-
-class SyntheticResult(Result):
-    raw: list[dict]
-
-    def __init__(self, name: str, synth_id: str, raw: list[dict], yellow_threshold: int, red_threshold: int, manual_threshold: int):
-        aggregate_failures = 0 
-
-        for test in raw:
-            if not test["result"]["passed"]:
-                aggregate_failures += 1
-
-        self.failure_count = aggregate_failures
-        super().__init__(name, synth_id, "synthetic", raw, aggregate_failures, yellow_threshold, red_threshold, manual_threshold)
 
 class EnvData:
     env: str
     dd_config: Configuration
-    _errs: dict[str, AggregateResult]
-    log_results: dict[str, LogResult]
-    event_results: dict[str, EventResult]
-    synthetic_results: dict[str, SyntheticResult]
+    _errs: dict[str, Result]
+    log_results: dict[str, Result]
+    event_results: dict[str, Result]
+    synthetic_results: dict[str, Result]
     alert_level = int
     manual_review = bool
-    
+
     def __init__(
-        self, 
+        self,
         json_config: dict,
         start: str,
         end: str,
-        ) -> EnvData:
+    ) -> EnvData:
 
         self.env = json_config["name"]
         self.timerange = utils.time_utils.normalize_time(start, end)
@@ -97,27 +77,31 @@ class EnvData:
         self.manual_review = False
 
         try:
-            self.dd_config = q.get_dd_config(json_config["API_KEY"], json_config["APP_KEY"])
+            self.dd_config = q.get_dd_config(
+                json_config["API_KEY"], json_config["APP_KEY"]
+            )
         except Exception as e:
-            print(f"Failed to create EnvData for {self.env} due to missing API or APP key")
+            print(
+                f"Failed to create EnvData for {self.env} due to missing API or APP key"
+            )
             sys.exit(1)
 
     def add_result(self, result: Result):
         if result.alert_level > self.alert_level:
             self.alert_level = result.alert_level
-        
+
         if result.manual_review == True:
             self.manual_review = True
 
-        if isinstance(result, AggregateResult):
+        if result.type == "aggregate":
             self._errs[result.name] = result
-        elif isinstance(result, LogResult):
+        elif result.type == "log":
             self.log_results[result.name] = result
-        elif isinstance(result, EventResult):
+        elif result.type == "event":
             self.event_results[result.name] = result
-        elif isinstance(result, SyntheticResult):
+        elif result.type == "synthetic":
             self.synthetic_results[result.name] = result
-    
+
     def get_all_results(self) -> dict[str, Result]:
         all_results = {}
         all_results.update(self._errs)
@@ -125,15 +109,14 @@ class EnvData:
         all_results.update(self.event_results)
         all_results.update(self.synthetic_results)
         return all_results
-    
+
     def get_manual_review_results(self) -> dict[str, Result]:
         all_results = self.get_all_results()
-        manual_results = {name: result for name, result in all_results.items() if result.manual_review}
+        manual_results = {
+            name: result for name, result in all_results.items() if result.manual_review
+        }
         return manual_results
 
-    def __getitem__(self, key: str) -> AggregateResult:
-        return self._errs[key]
-    
     def __repr__(self) -> str:
         lines = [f"EnvData(env={self.env!r})"]
 
@@ -162,84 +145,57 @@ class EnvData:
                 )
 
         return "\n".join(lines)
-        
+
     def errors(self):
         return self._errs.keys()
 
 
 class EnvDataFactory:
-    @staticmethod
-    def _build_aggregate_result(env_data: EnvData, query_name: str, query: str, yellow_threshold: int, red_threshold: int, manual_threshold: int) -> AggregateResult:
-        raw = q.query_log_count_aggregate(env_data.dd_config, query, env_data.timerange)
-        return AggregateResult(query_name, query, raw, yellow_threshold, red_threshold, manual_threshold)
-   
-    @staticmethod
-    def _build_log_result(env_data: EnvData, query_name: str, query: str, yellow_threshold: int, red_threshold: int, manual_threshold: int) -> LogResult:
-        raw = q.query_logs(env_data.dd_config, query, env_data.timerange)
-        return LogResult(query_name, query, raw, yellow_threshold, red_threshold, manual_threshold)
-
-    @staticmethod
-    def _build_event_result(env_data: EnvData, query_name: str, query: str, yellow_threshold: int, red_threshold: int, manual_threshold: int) -> EventResult:
-        raw = q.query_events(env_data.dd_config, query, env_data.timerange)
-        return EventResult(query_name, query, raw, yellow_threshold, red_threshold, manual_threshold)   
-    
-    @staticmethod
-    def _build_synthetic_result(env_data: EnvData, query_name: str, synth_id: str, yellow_threshold: int, red_threshold: int, manual_threshold: int) -> SyntheticResult:
-        raw = q.query_synthetic_test(env_data.dd_config, synth_id, env_data.timerange)
-        return SyntheticResult(query_name, synth_id, raw, yellow_threshold, red_threshold, manual_threshold)
-    
-    result_factory_map = {
-        "aggregate": _build_aggregate_result,
-        "log": _build_log_result,
-        "synthetic": _build_synthetic_result,
-        "event": _build_event_result
+    query_map = {
+        "aggregate": q.query_log_count_aggregate,
+        "log": q.query_logs,
+        "synthetic": q.query_synthetic_test,
+        "event": q.query_events,
     }
 
-    def _envdata_factory(
-        json_config: dict,
-        start: str,
-        end: str
-    ):
+    def _envdata_factory(json_config: dict, start: str, end: str):
         env_data = EnvData(json_config, start, end)
 
         queries: dict = json_config.get("queries")
         for query_name, query_config in queries.items():
-            query_config: dict                    
-            query_type = query_config.get("type") 
+            query_config: dict
+            query_type = query_config.get("type")
             query = query_config.get("query")
             red_threshold = query_config.get("red_threshold")
             yellow_threshold = query_config.get("yellow_threshold", red_threshold)
             manual_threshold = query_config.get("manual_threshold", 1)
-            
-            result_class = EnvDataFactory.result_factory_map.get(query_type)
-            if not result_class:
-                print(f"Unknown query type {query_type} in config for {env_data.env}")
-                continue
-            print(f"Processing {query_type} query {query} for env {env_data.env}")
 
-            new_result = result_class(env_data, query_name, query, yellow_threshold, red_threshold, manual_threshold)
+            fetch_query = EnvDataFactory.query_map.get(query_type)
+
+            raw_result = fetch_query(env_data.dd_config, query, env_data.timerange)
+            
+            aggregate = raw_result
+            if query_type in ["log", "event"]:
+                aggregate = len(raw_result)
+            elif query_type == "synthetic":
+                aggregate = 0
+                for test in raw_result:
+                    if not test["result"]["passed"]:
+                        aggregate += 1
+            
+            new_result = Result(
+                name=query_name,
+                query=query,
+                type=query_type,
+                raw=raw_result,
+                aggregate=aggregate,
+                yellow_threshold=yellow_threshold,
+                red_threshold=red_threshold,
+                manual_threshold=manual_threshold,
+            )
             env_data.add_result(new_result)
 
         return env_data
-    
-    def _build_result(
-        env_data: EnvData,
-        query_name: str,
-        query_config: dict
-    ) -> Result:
-        query_type = query_config.get("type") 
-        query = query_config.get("query")
-        red_threshold = query_config.get("red_threshold")
-        yellow_threshold = query_config.get("yellow_threshold", red_threshold)
-        
-        result_class = EnvDataFactory.result_factory_map.get(query_type)
-        if not result_class:
-            print(f"Unknown query type {query_type} in config for {env_data.env}")
-            return None
-        print(f"Processing {query_type} query {query} for env {env_data.env}")
-
-        return result_class(env_data, query_name, query, yellow_threshold, red_threshold)
-    
 
     @classmethod
     def from_json_file(
@@ -250,12 +206,14 @@ class EnvDataFactory:
     ) -> list[EnvData]:
         with open(path) as f:
             json_config: dict = json.load(f)
-        
+
         env_data_series: list = []
         if type(json_config) is list:
             for env in json_config:
                 env_data_series.append(EnvDataFactory._envdata_factory(env, start, end))
         else:
-            env_data_series.append(EnvDataFactory._envdata_factory(json_config, start, end))
+            env_data_series.append(
+                EnvDataFactory._envdata_factory(json_config, start, end)
+            )
 
         return env_data_series

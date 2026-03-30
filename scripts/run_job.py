@@ -1,10 +1,10 @@
 import os
 
-from env_data import EnvDataFactory, LogResult
+from env_data import EnvDataFactory, Result
 from app_config import AppConfig
 from slack_messenger import SlackMessenger
 
-def identify_unique_filemover_jobs(log_results: dict[str, LogResult]) -> set[str]:
+def identify_unique_filemover_jobs(log_results: dict[str, Result]) -> set[str]:
     unique_jobs: dict[str, int] = {}
 
     for failed_job in log_results.raw:
