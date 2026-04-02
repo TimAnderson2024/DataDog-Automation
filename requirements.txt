@@ -1,8 +1,14 @@
+awscrt==0.31.2
+boto3==1.42.81
+botocore==1.42.81
 certifi==2026.2.25
-datadog-api-client==2.52.0
-dotenv==0.9.9
+datadog-api-client==2.53.0
+Jinja2==3.1.6
+jmespath==1.1.0
+MarkupSafe==3.0.3
 python-dateutil==2.9.0.post0
-python-dotenv==1.2.2
+python-dotenv==1.2.1
+s3transfer==0.16.0
 six==1.17.0
 slack_sdk==3.41.0
 typing_extensions==4.15.0

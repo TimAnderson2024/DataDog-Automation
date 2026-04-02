@@ -2,7 +2,9 @@
     "TIME_FROM": "now-24h",
     "TIME_TO": "now",
     "QUERY_PATH": "config/queries.json",
-    "OUTPUT_PATH": "output/infra_report.txt",
+    "OUTPUT_PATH": "output/",
     "TEMPLATE_PATH": "templates/slack_template.md",
-    "OUTPUT_CHANNEL_ID": "C0ALY9QJ30T"
+    "OUTPUT_CHANNEL_ID": "C0ALY9QJ30T",
+    "S3_BUCKET": "daily-monitoring-report-539578862955-us-east-2-an",
+    "S3_KEY_PREFIX": "reports/"
 }

@@ -3,3 +3,4 @@ scripts/__pycache__/*
 output/*
 .env
 .vscode/launch.json
+.venv

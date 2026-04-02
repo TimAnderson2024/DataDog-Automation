@@ -13,6 +13,8 @@ class AppConfig:
     output_path: Path
     template_path: Path
     output_channel_id: str
+    s3_bucket: str
+    s3_key_prefix: str
 
 def load_config(path) -> AppConfig:
     with open(path, "r") as f:
@@ -24,5 +26,7 @@ def load_config(path) -> AppConfig:
         query_path=Path(data["QUERY_PATH"]),
         output_path=Path(data["OUTPUT_PATH"]),  
         template_path=Path(data["TEMPLATE_PATH"]),
-        output_channel_id=data["OUTPUT_CHANNEL_ID"]
+        output_channel_id=data["OUTPUT_CHANNEL_ID"],
+        s3_bucket=data["S3_BUCKET"],
+        s3_key_prefix=data["S3_KEY_PREFIX"]
     )
