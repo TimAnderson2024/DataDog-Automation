@@ -1,0 +1,540 @@
+data:
+  app_config.py: |-
+    import json
+    
+    from dataclasses import dataclass
+    from pathlib import Path
+    
+    CONFIG_PATH = Path("config/config.json")
+    
+    @dataclass
+    class AppConfig:
+        time_from: str
+        time_to: str
+        query_path: Path
+        output_path: Path
+        template_path: Path
+        output_channel_id: str
+        s3_bucket: str
+        s3_key_prefix: str
+    
+    def load_config(path) -> AppConfig:
+        with open(path, "r") as f:
+            data = json.load(f)
+    
+        return AppConfig(
+            time_from=data["TIME_FROM"],
+            time_to=data["TIME_TO"],
+            query_path=Path(data["QUERY_PATH"]),
+            output_path=Path(data["OUTPUT_PATH"]),  
+            template_path=Path(data["TEMPLATE_PATH"]),
+            output_channel_id=data["OUTPUT_CHANNEL_ID"],
+            s3_bucket=data["S3_BUCKET"],
+            s3_key_prefix=data["S3_KEY_PREFIX"]
+        )
+
+  env_data.py: |-
+    import sys
+    import json
+    
+    import utils.query as q
+    import utils.time_utils
+    
+    from datadog_api_client import Configuration
+    
+    
+    class Result:
+        name: str
+        query: str
+        type: str
+        raw: int | list[dict]
+        aggregate: int
+        yellow_threshold: int
+        red_threshold: int
+        alert_level: int
+        manual_review: bool
+    
+        def __init__(
+            self,
+            name: str,
+            query: str,
+            type: str,
+            raw: int | list[dict],
+            aggregate: int,
+            yellow_threshold: int,
+            red_threshold: int,
+            manual_threshold: int,
+        ):
+            self.name = name
+            self.query = query
+            self.type = type
+            self.raw = raw
+            self.aggregate = aggregate
+            self.yellow_threshold = yellow_threshold
+            self.red_threshold = red_threshold
+    
+            if self.aggregate >= self.red_threshold:
+                self.alert_level = 2
+            elif self.aggregate >= self.yellow_threshold:
+                self.alert_level = 1
+            else:
+                self.alert_level = 0
+    
+            if self.aggregate >= manual_threshold:
+                self.manual_review = True
+            else:
+                self.manual_review = False
+    
+    
+    class EnvData:
+        env: str
+        dd_config: Configuration
+        _errs: dict[str, Result]
+        log_results: dict[str, Result]
+        event_results: dict[str, Result]
+        synthetic_results: dict[str, Result]
+        alert_level = int
+        manual_review = bool
+    
+        def __init__(
+            self,
+            json_config: dict,
+            start: str,
+            end: str,
+        ):
+    
+            self.env = json_config["name"]
+            self.timerange = utils.time_utils.normalize_time(start, end)
+            self._errs = {}
+            self.log_results = {}
+            self.event_results = {}
+            self.synthetic_results = {}
+            self.alert_level = 0
+            self.manual_review = False
+    
+            try:
+                self.dd_config = q.get_dd_config(
+                    json_config["API_KEY"], json_config["APP_KEY"]
+                )
+            except Exception as e:
+                print(
+                    f"Failed to create EnvData for {self.env} due to missing API or APP key"
+                )
+                sys.exit(1)
+    
+        def add_result(self, result: Result):
+            if result.alert_level > self.alert_level:
+                self.alert_level = result.alert_level
+    
+            if result.manual_review == True:
+                self.manual_review = True
+    
+            if result.type == "aggregate":
+                self._errs[result.name] = result
+            elif result.type == "log":
+                self.log_results[result.name] = result
+            elif result.type == "event":
+                self.event_results[result.name] = result
+            elif result.type == "synthetic":
+                self.synthetic_results[result.name] = result
+    
+        def get_all_results(self) -> dict[str, Result]:
+            all_results = {}
+            all_results.update(self._errs)
+            all_results.update(self.log_results)
+            all_results.update(self.event_results)
+            all_results.update(self.synthetic_results)
+            return all_results
+    
+        def get_manual_review_results(self) -> dict[str, Result]:
+            all_results = self.get_all_results()
+            manual_results = {
+                name: result for name, result in all_results.items() if result.manual_review
+            }
+            return manual_results
+    
+        def __repr__(self) -> str:
+            lines = [f"EnvData(env={self.env!r})"]
+    
+            if self._errs:
+                lines.append(" Errors:")
+                for key in sorted(self._errs):
+                    result = self._errs[key]
+                    lines.append(f"  {key}: {result!r}")
+    
+            if self.event_results:
+                lines.append(" Event Results:")
+                for key in sorted(self.event_results):
+                    event = self.event_results[key]
+                    lines.append(f"{key}: {event.aggregate}")
+    
+            if self.synthetic_results:
+                lines.append(" SyntheticResults:")
+                for key in sorted(self.synthetic_results):
+                    synth = self.synthetic_results[key]
+                    lines.append(
+                        f"  {key}: SyntheticResult("
+                        f"name={synth.name!r}, "
+                        f"synth_id={synth.query!r}, "
+                        f"failure={synth.failure_count}"
+                        f")"
+                    )
+    
+            return "\n".join(lines)
+    
+        def errors(self):
+            return self._errs.keys()
+    
+    
+    class EnvDataFactory:
+        query_map = {
+            "aggregate": q.query_log_count_aggregate,
+            "log": q.query_logs,
+            "synthetic": q.query_synthetic_test,
+            "event": q.query_events,
+        }
+    
+        def _envdata_factory(json_config: dict, start: str, end: str):
+            env_data = EnvData(json_config, start, end)
+    
+            queries: dict = json_config.get("queries")
+            for query_name, query_config in queries.items():
+                query_config: dict
+                query_type = query_config.get("type")
+                query = query_config.get("query")
+                red_threshold = query_config.get("red_threshold")
+                yellow_threshold = query_config.get("yellow_threshold", red_threshold)
+                manual_threshold = query_config.get("manual_threshold", 1)
+    
+                fetch_query = EnvDataFactory.query_map.get(query_type)
+    
+                raw_result = fetch_query(env_data.dd_config, query, env_data.timerange)
+                
+                aggregate = raw_result
+                if query_type in ["log", "event"]:
+                    aggregate = len(raw_result)
+                elif query_type == "synthetic":
+                    aggregate = 0
+                    for test in raw_result:
+                        if not test["result"]["passed"]:
+                            aggregate += 1
+                
+                new_result = Result(
+                    name=query_name,
+                    query=query,
+                    type=query_type,
+                    raw=raw_result,
+                    aggregate=aggregate,
+                    yellow_threshold=yellow_threshold,
+                    red_threshold=red_threshold,
+                    manual_threshold=manual_threshold,
+                )
+                env_data.add_result(new_result)
+    
+            return env_data
+    
+        @classmethod
+        def from_json_file(
+            cls,
+            path: str,
+            start: str,
+            end: str,
+        ) -> list[EnvData]:
+            with open(path) as f:
+                json_config: dict = json.load(f)
+    
+            env_data_series: list = []
+            if type(json_config) is list:
+                for env in json_config:
+                    env_data_series.append(EnvDataFactory._envdata_factory(env, start, end))
+            else:
+                env_data_series.append(
+                    EnvDataFactory._envdata_factory(json_config, start, end)
+                )
+    
+            return env_data_series
+
+  slack_messenger.py: |-
+    from env_data import EnvData, Result
+    from datetime import date
+    
+    from slack_sdk import WebClient
+    from slack_sdk.errors import SlackApiError
+    
+    class SlackMessenger:
+        data: dict[EnvData]
+        message_blocks: list[dict]
+        token: str
+        channel_id: str
+    
+        def __init__(self, all_env_data: dict[EnvData], token: str, channel_id: str):
+            self.data = all_env_data
+            self.message_blocks = []
+            self.token = token
+            self.channel_id = channel_id
+    
+        def send_message(self):
+            if not self.token:
+                raise ValueError("SLACK_API_KEY is not set")
+            
+            if not self.channel_id:
+                raise ValueError("OUTPUT_CHANNEL_ID is not set")
+            
+            client = WebClient(self.token)
+            try:
+                auth_response = client.auth_test()
+                print(
+                    f"Authenticated to Slack as '{auth_response['user']}' in workspace '{auth_response['team']}'"
+                )
+    
+                response = client.chat_postMessage(
+                    channel=self.channel_id,
+                    blocks=self.message_blocks,
+                )
+    
+                print(f"Slack message sent successfully. ts={response['ts']}")
+    
+            except SlackApiError as e:
+                print(f"Slack API error: {e.response['error']}")
+                raise
+        
+        def build_message(self):
+            self.build_header()
+    
+            # Split up envs by alert level
+            alert_envs = {"green": [], "yellow": [], "red": []}
+            for env in self.data:
+                if env.alert_level == 2:
+                    alert_envs["red"].append(env)
+                elif env.alert_level == 1:
+                    alert_envs["yellow"].append(env)
+                else:
+                    alert_envs["green"].append(env)
+    
+            # Get manual review results
+            manual_review_envs = [env for env in self.data if getattr(env, "manual_review", False)]
+            self.build_summary(alert_envs, manual_review_envs)
+            self.build_env_breakdowns(alert_envs)
+        
+        def build_header(self):
+            header_blocks = []
+    
+            header_blocks.append(
+                {
+                    "type": "header",
+                    "text": {
+                        "type": "plain_text",
+                        "text": f"📊 ENV Health Status — {date.today().strftime('%Y-%m-%d')}",
+                    },
+                }
+            )
+    
+            env_list = [env.env for env in self.data]
+            header_blocks.append(
+                {
+                    "type": "context",
+                    "elements": [
+                        {
+                            "type": "mrkdwn",
+                            "text": (
+                                f"{len(env_list)} environments • "
+                                f"{', '.join(f'*{env_name}*' for env_name in env_list)}"
+                            ),
+                        }
+                    ],
+                }
+            )
+    
+            self.message_blocks.extend(header_blocks)
+    
+        
+        def build_issue_summary_line(self, env: EnvData, alert_level: int) -> str:
+            all_results = env.get_all_results()
+            alert_results = [f"{result.aggregate} {result.name}" for result in all_results.values() if result.alert_level == alert_level]
+    
+            if alert_level == 2:
+                return f"🔴 *{env.env}* — " + ", ".join(alert_results)
+            return f"🟡 *{env.env}* — " + ", ".join(alert_results)     
+    
+    
+        def build_summary(self, alert_envs: dict[str, list[EnvData]], manual_review_envs: list[EnvData]):
+            summary_blocks = []
+    
+            if manual_review_envs:
+                manual_review_lines = [f"🔎 *{env.env}* — {', '.join(f'{result.name} ({result.aggregate})' for result in env.get_manual_review_results().values())}" for env in manual_review_envs]
+                summary_blocks.append(
+                    {
+                        "type": "section",
+                        "text": {
+                            "type": "mrkdwn",
+                            "text": "*Manual Review*\n" + "\n".join(manual_review_lines),
+                        }
+                    }
+                )
+    
+            if alert_envs["green"]:
+                summary_blocks.append(
+                    {
+                        "type": "section",
+                        "text": {
+                            "type": "mrkdwn",
+                            "text": f"*No Errors:*\n🟢 *{', '.join(env.env for env in alert_envs['green'])}*"
+                        },
+                    }
+                )
+            
+            summary_blocks.append({"type": "divider"})
+            self.message_blocks.extend(summary_blocks)
+        
+        @staticmethod
+        def get_status_icon(obj: EnvData | Result) -> str:
+            if obj.alert_level == 2:
+                return "🔴"
+            elif obj.alert_level == 1:
+                return "🟡"
+            else:
+                return "🟢"
+    
+        def build_env_fields(self, env: EnvData) -> list[dict]:
+            env_blocks = []
+            all_results = env.get_all_results()
+    
+            err_text = ""
+            for err in ["504", "502", "oom"]:
+                result = all_results.get(err)
+                err_text = err_text + f"*{self.get_status_icon(result)} {err}:* {result.aggregate} \n"
+            if all_results.get("503").aggregate > 0:
+                result = all_results.get("503")
+                err_text = err_text + f"*{self.get_status_icon(result)} 503:* {result.aggregate} \n"
+            env_blocks.append({"type": "mrkdwn", "text": err_text})
+    
+            synthetic_results = env.synthetic_results
+            if synthetic_results and len(synthetic_results.values()) > 0:
+                synthetic_parts = []
+                for _, result in synthetic_results.items():
+                    icon = "✅" if result.aggregate == 0 else "🔴"
+                    synthetic_parts.append(f"`{result.name}` ({result.aggregate}) {icon} ")
+                synthetic_text = "*Synthetic:* " + "\n".join(synthetic_parts)
+                env_blocks.append({"type": "mrkdwn", "text": synthetic_text})
+    
+            return env_blocks
+        
+        def build_filemover_context(self, env) -> dict | None:
+            fm_jobs = getattr(env, "filtered_fm_jobs", {}) or {}
+            if not fm_jobs:
+                return None
+    
+            fm_parts = [f"`{job}` ({count})" for job, count in fm_jobs.items()]
+            return {
+                "type": "context",
+                "elements": [
+                    {
+                        "type": "mrkdwn",
+                        "text": "*Filemover failures:* " + ", ".join(fm_parts),
+                    }
+                ],
+            }
+    
+        def build_env_breakdowns(self, alert_envs: dict[str, list[EnvData]]) -> list[dict]:
+            for env in [*alert_envs["yellow"], *alert_envs["red"]]:
+                env_block = {
+                    "type": "section",
+                    "text": {
+                        "type": "mrkdwn",
+                        "text": f"*{env.env}*"
+                    },
+                    "fields": self.build_env_fields(env)
+                }
+    
+                self.message_blocks.append(env_block)
+                fm_context = self.build_filemover_context(env)
+                print(fm_context)
+                if fm_context:
+                    self.message_blocks.append(fm_context)
+                self.message_blocks.append({"type": "divider"})
+
+  run_job.py: |-
+    from datetime import date
+    import os
+    import boto3
+    
+    from jinja2 import Template
+    
+    from env_data import EnvData, EnvData, EnvDataFactory, Result
+    from app_config import AppConfig
+    from slack_messenger import SlackMessenger
+    
+    def identify_unique_filemover_jobs(log_results: dict[str, Result]) -> set[str]:
+        unique_jobs: dict[str, int] = {}
+    
+        for failed_job in log_results.raw:
+            print(failed_job['attributes']['attributes']['fm_job']['name'])
+            job_name = failed_job['attributes']['attributes']['fm_job']['name']
+            unique_jobs[job_name] = unique_jobs.get(job_name, 0) + 1
+    
+        return unique_jobs
+    
+    def build_report(config: AppConfig, all_env_data: list[EnvData]) -> str:
+        with open(config.template_path) as f:
+            template = Template(f.read())
+    
+        output = template.render(
+            date=date.today(),
+            data=all_env_data
+        )
+    
+        output_path = config.output_path / f"Business Day Infra Report {date.today()}.md"
+    
+        with open(output_path, 'w') as out_f:
+            out_f.write(output)
+        
+        print(f"Report generated at: {output_path}")
+        return str(output_path)
+    
+    def upload_report_to_s3(config: AppConfig, report_path: str) -> None:
+        s3_client = boto3.client('s3')
+        
+        # Extract the filename from the report path
+        report_filename = os.path.basename(report_path)
+        
+        # Construct the S3 key
+        s3_key = f"{config.s3_key_prefix}{report_filename}"
+        
+        # Upload the file
+        s3_client.upload_file(report_path, config.s3_bucket, s3_key)
+        
+        print(f"Report uploaded to S3: s3://{config.s3_bucket}/{s3_key}")
+    
+    def run_job(config: AppConfig) -> None:
+        all_env_data = EnvDataFactory.from_json_file(config.query_path, config.time_from, config.time_to)
+    
+        for env in all_env_data:
+            if env.log_results.get('failed_fm_jobs'):
+                env.filtered_fm_jobs = identify_unique_filemover_jobs(env.log_results.get('failed_fm_jobs', {}))
+        
+        report_path = build_report(config, all_env_data)
+        # upload_report_to_s3(config, report_path)
+        messenger = SlackMessenger(all_env_data, token=os.getenv("SLACK_API_KEY"), channel_id=config.output_channel_id)
+        messenger.build_message()
+        messenger.send_message()
+
+  main.py: |-
+    #!/usr/bin/env python
+    
+    import os
+    import sys
+    import app_config
+    
+    from dotenv import load_dotenv
+    from run_job import run_job
+    
+    def main():
+        load_dotenv()
+        config = app_config.load_config(os.getenv("CONFIG_PATH"))
+        run_job(config)
+    
+        return 0
+    
+    
+    if __name__ == "__main__":
+        sys.exit(main())

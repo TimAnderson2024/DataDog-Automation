@@ -65,7 +65,7 @@ class EnvData:
         json_config: dict,
         start: str,
         end: str,
-    ) -> EnvData:
+    ):
 
         self.env = json_config["name"]
         self.timerange = utils.time_utils.normalize_time(start, end)

@@ -187,8 +187,8 @@
   },
   {
     "name": "ACE",
-    "API_KEY": "ACE_API_KEY",
-    "APP_KEY": "ACE_APP_KEY",
+    "API_KEY": "DD_ACE_API_KEY",
+    "APP_KEY": "DD_ACE_APP_KEY",
     "queries": {
       "504": {
         "type": "aggregate",
