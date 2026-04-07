@@ -90,7 +90,18 @@ def to_block_scalar(text: str, indent: int = 4) -> str:
 
 
 def generate_data_section(dir_path: Path) -> str:
-    parts = ["data:"]
+    # Prepend full ConfigMap header so output is a complete manifest
+    header = (
+        "apiVersion: v1\n"
+        "kind: ConfigMap\n"
+        "metadata:\n"
+        "  name: {{ .Chart.Name }}-daily-monitoring-configmap\n"
+        "  namespace: {{ .Release.Namespace }}\n"
+        "  labels:\n"
+        "    app: {{ .Chart.Name }}-daily-monitoring-cron\n"
+        "    env: {{ required \"value expected\" .Values.env }}\n"
+    )
+    parts = [header, "data:"]
     files = list(py_files(dir_path))
     ordered = topological_sort(files)
     for p in ordered:

@@ -1,8 +1,8 @@
 import sys
 import json
 
-import utils.query as q
-import utils.time_utils
+import query as q
+import time_utils
 
 from datadog_api_client import Configuration
 
@@ -68,7 +68,7 @@ class EnvData:
     ):
 
         self.env = json_config["name"]
-        self.timerange = utils.time_utils.normalize_time(start, end)
+        self.timerange = time_utils.normalize_time(start, end)
         self._errs = {}
         self.log_results = {}
         self.event_results = {}

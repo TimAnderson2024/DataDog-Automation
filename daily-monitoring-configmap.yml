@@ -1,3 +1,12 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Chart.Name }}-daily-monitoring-configmap
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: {{ .Chart.Name }}-daily-monitoring-cron
+    env: {{ required "value expected" .Values.env }}
+
 data:
   app_config.py: |-
     import json
@@ -33,12 +42,277 @@ data:
             s3_key_prefix=data["S3_KEY_PREFIX"]
         )
 
+  time_utils.py: |-
+    from datetime import datetime, timedelta, timezone
+    from zoneinfo import ZoneInfo
+    import re
+    
+    def iso_to_unix_milliseconds(iso_time: str) -> int:
+        """
+        Convert an ISO 8601 formatted time string to Unix timestamp in milliseconds.
+        """
+        dt = datetime.fromisoformat(iso_time.replace("Z", "+00:00"))
+        return int(dt.timestamp() * 1000)
+    
+    def iso_to_unix_seconds(iso_time: str) -> int:
+        """
+        Convert an ISO 8601 formatted time string to Unix timestamp in seconds.
+        """
+        return iso_to_unix_milliseconds(iso_time) // 1000
+    
+    def time_range_iso_hours_ago(hours_ago: int) -> str:
+        """
+        Get the ISO 8601 formatted time string for a time 'hours_ago' hours before now.
+        """
+        time_to = datetime.now()
+        time_from = time_to - timedelta(hours=hours_ago)
+        return time_from.isoformat(), time_to.isoformat()
+    
+    def unix_to_iso(unix_time: int | float) -> str:
+        unix_time = float(unix_time)
+    
+        # Heuristic: anything above ~1e12 is almost certainly ms since epoch
+        if unix_time > 1_000_000_000_000:
+            unix_time /= 1000.0
+    
+        dt = datetime.fromtimestamp(unix_time, tz=ZoneInfo("America/New_York"))
+        return dt.strftime("%b %#d, %Y at %#I:%M %p est")
+    
+    _UNIT_MS = {
+        "s": 1000,
+        "m": 60_000,
+        "h": 3_600_000,
+        "d": 86_400_000,
+        "w": 604_800_000,
+    }
+    
+    _NOW_RE = re.compile(r"^now(?:-(\d+)([smhdw]))?$")
+    
+    def _to_unix_ms(t: str, now_ms: int) -> int:
+        """
+        Convert 'now' or 'now-<N><unit>' to unix ms.
+        """
+        m = _NOW_RE.match(t.strip())
+        if not m:
+            raise ValueError(f"Unsupported time format: {t!r} (expected 'now' or 'now-<N><unit>')")
+        qty, unit = m.groups()
+        if qty is None:
+            return now_ms
+        return now_ms - int(qty) * _UNIT_MS[unit]
+    
+    def normalize_time(time_from: str, time_to: str) -> tuple[int, int]:
+        now_ms = int(datetime.now(timezone.utc).timestamp() * 1000)
+        from_ms = _to_unix_ms(time_from, now_ms)
+        to_ms = _to_unix_ms(time_to, now_ms)
+    
+        if from_ms > to_ms:
+            raise ValueError(f"Invalid range: from ({time_from}) is after to ({time_to})")
+    
+        return (from_ms, to_ms)
+    
+    def get_filtered_date_ranges(days_back: int):
+        """
+        Generate list of (from, to) date tuples for weekdays only in the last N weeks.
+        Returns dates in ISO format suitable for DataDog API.
+        """
+        
+        hours_ago = days_back * 24
+        business, weekends = [], []
+        while hours_ago > 0:
+            time_from, time_to = f"now-{hours_ago}h", f"now-{hours_ago-24}h"
+            if (datetime.now() - timedelta(hours_ago - 1)).weekday() < 5:
+                business.append((time_from, time_to))
+            else:
+                weekends.append((time_from, time_to))
+            hours_ago -= 24
+    
+        return business, weekends
+
+  query.py: |-
+    import os
+    from datadog_api_client import ApiClient, Configuration
+    
+    from datadog_api_client.v1 import Configuration as V1Configuration
+    from datadog_api_client.v1.api.metrics_api import MetricsApi as V1MetricsApi
+    from datadog_api_client.v1.api.synthetics_api import SyntheticsApi, SyntheticsFetchUptimesPayload
+    
+    from datadog_api_client.v2.api.events_api import EventsApi
+    from datadog_api_client.v2.model.events_list_request import EventsListRequest
+    from datadog_api_client.v2.model.events_query_filter import EventsQueryFilter
+    from datadog_api_client.v2.api.logs_api import LogsApi
+    from datadog_api_client.v2.model.logs_aggregate_request import LogsAggregateRequest
+    from datadog_api_client.v2.model.logs_query_filter import LogsQueryFilter
+    from datadog_api_client.v2.model.logs_compute import LogsCompute
+    from datadog_api_client.v2.model.logs_aggregation_function import LogsAggregationFunction
+    from datadog_api_client.v2.model.logs_list_request import LogsListRequest
+    from datadog_api_client.v2.model.logs_list_request_page import LogsListRequestPage
+    from datadog_api_client.v2.model.logs_sort import LogsSort
+    from datadog_api_client.v2.model.events_request_page import EventsRequestPage
+    
+    
+    import time_utils as time
+    
+    DATADOG_URL = "datadoghq.com"
+    
+    def get_dd_config(api_key: str, app_key: str) -> Configuration:
+        ddconfig = Configuration()
+        ddconfig.server_variables["site"] = DATADOG_URL
+        
+        if not os.getenv(api_key) or not os.getenv(app_key):
+            raise KeyError("API_KEY and APP_KEY must be defined in the environment configuration.")
+    
+        ddconfig.api_key["apiKeyAuth"] = os.getenv(api_key)
+        ddconfig.api_key["appKeyAuth"] = os.getenv(app_key)
+    
+        return ddconfig
+    
+    # TODO: Make DD config universal between v1/v2
+    def get_v1_dd_config(env_config: dict) -> V1Configuration:
+        v1_ddconfig = V1Configuration()
+        v1_ddconfig.server_variables["site"] = env_config["DD_URL"]
+    
+        if not os.getenv(env_config["API_KEY"]) or not os.getenv(env_config["APP_KEY"]):
+            raise KeyError("API_KEY and APP_KEY must be defined in the environment configuration.")
+        
+        v1_ddconfig.api_key["apiKeyAuth"] = os.getenv(env_config["API_KEY"])
+        v1_ddconfig.api_key["appKeyAuth"] = os.getenv(env_config["APP_KEY"])
+    
+        return v1_ddconfig
+    
+    def query_logs(dd_config: Configuration, query_string: str, time_range: tuple[int, int]) -> list[dict]:
+        with ApiClient(dd_config) as api_client:
+            api_instance = LogsApi(api_client)
+            query_body = LogsListRequest(
+                    filter=LogsQueryFilter(
+                        query=query_string,
+                        _from=str(time_range[0]),
+                        to=str(time_range[1] )
+                    ),
+                    sort=LogsSort.TIMESTAMP_DESCENDING,
+                    page=LogsListRequestPage(limit=1000)
+                )
+    
+            all_logs = []
+            logs_processed = 0
+            while True:
+                response = api_instance.list_logs(body=query_body)
+                response_data = response.data
+                response_metadata = response.meta.to_dict()
+    
+                all_logs.extend(response_data)
+                logs_processed += len(response_data)
+                print(f"Processed {logs_processed} log entries...")
+                        
+                if not response_metadata.get('page', None):
+                    break
+                query_body.page.cursor = response_metadata['page']['after']
+    
+        return all_logs
+    
+    def query_metric(dd_config: V1Configuration, query_string: str, time_range: tuple[int, int]) -> list[dict]:
+        with ApiClient(dd_config) as api_client:
+            api_instance = V1MetricsApi(api_client)
+    
+            response = api_instance.query_metrics(
+                _from=time_range[0],
+                to=time_range[1],
+                query=query_string
+            )
+    
+            timeseries = []
+            for series in response.series:
+                timeseries.append(series.to_dict())
+            
+            return timeseries
+    
+    def query_events(dd_config: Configuration, query_string: str, time_range: tuple[int, int]) -> list[dict]:
+        with ApiClient(dd_config) as api_client:
+            api_instance = EventsApi(api_client)
+    
+            query_body = EventsListRequest(
+                filter=EventsQueryFilter(
+                    query=query_string,
+                    _from=str(time_range[0]),
+                    to=str(time_range[1])
+                ),
+                page=EventsRequestPage(limit=1000)
+            )
+    
+            all_logs = []
+            while True:
+                response = api_instance.search_events(body=query_body)
+                response_data = response.data
+                response_metadata = response.meta.to_dict()
+    
+                all_logs.extend(response_data)
+                if not response_metadata.get('page', None):
+                    break
+                query_body.page.cursor = response_metadata['page']['after']
+    
+            return all_logs 
+    
+    def query_synthetic_test(dd_config: Configuration, test_id: str, time_range) -> dict:
+        time_from, time_to = time_range[0], time_range[1]
+    
+        with ApiClient(dd_config) as api_client:
+            api_instance = SyntheticsApi(api_client)
+    
+            # Paginate results using last_timestamp_fetched (API output cuts off at 150 results)
+            synthetic_test_results = []
+            print(f"Fetching synthetic results from {time.unix_to_iso(time_from)} to {time.unix_to_iso(time_to)}:")
+            while time_to > time_from:
+                query_response = api_instance.get_api_test_latest_results(public_id=test_id, from_ts=time_from, to_ts=time_to).to_dict()
+                results = query_response["results"]
+    
+                print(f"\tFetched {len(results)} results from {time.unix_to_iso(results[-1]['check_time'])} to {time.unix_to_iso(results[0]['check_time'])}")
+                time_to = query_response["last_timestamp_fetched"]
+                synthetic_test_results += query_response["results"]
+    
+            print(f"Fetched {len(synthetic_test_results)} results from {time.unix_to_iso(synthetic_test_results[0]['check_time'])} to {time.unix_to_iso(synthetic_test_results[-1]['check_time'])}")
+            return synthetic_test_results
+        
+    def query_synthetic_uptime(dd_config: Configuration, test_id: str, time_from: str, time_to: str) -> dict:
+        with ApiClient(dd_config) as api_client:
+            api_instance = SyntheticsApi(api_client)
+    
+            query_body = SyntheticsFetchUptimesPayload(
+                from_ts = time_from,
+                public_ids = [test_id],
+                to_ts = time_to
+            )
+    
+            synthetic_test_coverage = api_instance.fetch_uptimes(query_body)[0].to_dict()
+            return synthetic_test_coverage
+    
+    def query_log_count_aggregate(dd_config: Configuration, query_string: str, time_range: tuple[int, int]) -> int:
+        with ApiClient(dd_config) as api_client:
+            api_instance = LogsApi(api_client)
+    
+            response = api_instance.aggregate_logs(
+                body=LogsAggregateRequest(
+                    filter=LogsQueryFilter(
+                        query=query_string,
+                        _from=str(time_range[0]),
+                        to=str(time_range[1]) 
+                    ),
+                    compute=[
+                        LogsCompute(
+                            aggregation=LogsAggregationFunction.COUNT
+                        )
+                    ]
+                )
+            )
+    
+            if response.data.buckets and len(response.data.buckets) > 0:
+                return int(response.data.buckets[0].computes.get('c0', 0))
+            return 0
+
   env_data.py: |-
     import sys
     import json
     
-    import utils.query as q
-    import utils.time_utils
+    import query as q
+    import time_utils
     
     from datadog_api_client import Configuration
     
@@ -104,7 +378,7 @@ data:
         ):
     
             self.env = json_config["name"]
-            self.timerange = utils.time_utils.normalize_time(start, end)
+            self.timerange = time_utils.normalize_time(start, end)
             self._errs = {}
             self.log_results = {}
             self.event_results = {}
@@ -513,7 +787,7 @@ data:
                 env.filtered_fm_jobs = identify_unique_filemover_jobs(env.log_results.get('failed_fm_jobs', {}))
         
         report_path = build_report(config, all_env_data)
-        # upload_report_to_s3(config, report_path)
+        upload_report_to_s3(config, report_path)
         messenger = SlackMessenger(all_env_data, token=os.getenv("SLACK_API_KEY"), channel_id=config.output_channel_id)
         messenger.build_message()
         messenger.send_message()

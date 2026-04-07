@@ -19,7 +19,7 @@ from datadog_api_client.v2.model.logs_sort import LogsSort
 from datadog_api_client.v2.model.events_request_page import EventsRequestPage
 
 
-import utils.time_utils as time
+import time_utils as time
 
 DATADOG_URL = "datadoghq.com"
 
