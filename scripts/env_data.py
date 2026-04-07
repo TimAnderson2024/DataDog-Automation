@@ -81,7 +81,7 @@ class EnvData:
             )
         except Exception as e:
             print(
-                f"Failed to create EnvData for {self.env} due to missing API or APP key"
+                f"Failed to create EnvData for {self.env} due to missing API or APP key: {e}"
             )
             sys.exit(1)
 

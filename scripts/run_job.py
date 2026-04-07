@@ -7,7 +7,7 @@ from jinja2 import Template
 from env_data import EnvData, EnvData, EnvDataFactory, Result
 from app_config import AppConfig
 from slack_messenger import SlackMessenger
-from external_helpers import send_slack_message
+from external_helpers import get_aws_secrets_helper, send_slack_message
 
 QUERIES = [
   {
@@ -278,4 +278,10 @@ def run_job(config: AppConfig) -> None:
     # upload_report_to_s3(config, report_path)
     messenger = SlackMessenger(all_env_data)
     messenger.build_message()
-    send_slack_message(messenger.message_blocks, config.output_channel_id, os.getenv("SLACK_API_KEY"))
+    
+    secret_name = os.getenv("SECRET_NAME")
+    region_name = os.getenv("AWS_REGION")
+    secrets = get_aws_secrets_helper([secret_name], region_name)
+    slack_api_key = secrets["daily-monitoring-us-east-2"].get("SLACK_API_KEY")
+
+    send_slack_message(messenger.message_blocks, config.output_channel_id, slack_api_key)

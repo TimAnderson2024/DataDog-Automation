@@ -19,6 +19,7 @@ from datadog_api_client.v2.model.logs_sort import LogsSort
 from datadog_api_client.v2.model.events_request_page import EventsRequestPage
 
 
+from external_helpers import get_aws_secrets_helper
 import time_utils as time
 
 DATADOG_URL = "datadoghq.com"
@@ -27,11 +28,12 @@ def get_dd_config(api_key: str, app_key: str) -> Configuration:
     ddconfig = Configuration()
     ddconfig.server_variables["site"] = DATADOG_URL
     
-    if not os.getenv(api_key) or not os.getenv(app_key):
-        raise KeyError("API_KEY and APP_KEY must be defined in the environment configuration.")
+    secret_name = os.getenv("SECRET_NAME")
+    region_name = os.getenv("AWS_REGION")
+    secrets = get_aws_secrets_helper([secret_name], region_name)
 
-    ddconfig.api_key["apiKeyAuth"] = os.getenv(api_key)
-    ddconfig.api_key["appKeyAuth"] = os.getenv(app_key)
+    ddconfig.api_key["apiKeyAuth"] = secrets["daily-monitoring-us-east-2"].get(api_key)
+    ddconfig.api_key["appKeyAuth"] = secrets["daily-monitoring-us-east-2"].get(app_key)
 
     return ddconfig
 
