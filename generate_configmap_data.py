@@ -17,8 +17,15 @@ import ast
 
 
 def py_files(directory: Path) -> Iterable[Path]:
+    # Yield all .py files plus specific non-Python assets we want in the ConfigMap
     for p in directory.glob("*.py"):
         if p.is_file():
+            yield p
+
+    # Include queries.json and slack_template.md if present
+    for extra in ("queries.json", "slack_template.md"):
+        p = directory / extra
+        if p.exists() and p.is_file():
             yield p
 
 
@@ -107,6 +114,12 @@ def generate_data_section(dir_path: Path) -> str:
     for p in ordered:
         key = p.name
         content = p.read_text(encoding="utf-8")
+        # Only escape handlebars in non-Python assets to avoid corrupting code.
+        if p.suffix in (".md", ".json"):
+            if "{{" in content or "}}" in content:
+                # Replace literal {{ and }} with template-safe print of those literals
+                content = content.replace("{{", '{{"{{"}}')
+                content = content.replace("}}", '{{"}}"}}')
         # key is indented two spaces; indent block content two more spaces (total 4)
         parts.append(f"  {key}: {to_block_scalar(content, indent=4).rstrip()}\n")
     return "\n".join(parts)

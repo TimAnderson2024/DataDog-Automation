@@ -7,6 +7,224 @@ from jinja2 import Template
 from env_data import EnvData, EnvData, EnvDataFactory, Result
 from app_config import AppConfig
 from slack_messenger import SlackMessenger
+from external_helpers import send_slack_message
+
+QUERIES = [
+  {
+    "name": "ULP",
+    "API_KEY": "DD_ULP_API_KEY",
+    "APP_KEY": "DD_ULP_APP_KEY",
+    "queries": {
+      "504": {
+        "type": "aggregate",
+        "query": "env:ulp-prod status:error @http.status_code:504 service:elb",
+        "yellow_threshold": 35,
+        "red_threshold": 55
+      },
+      "502": {
+        "type": "aggregate",
+        "query": "env:ulp-prod status:error @http.status_code:502 service:elb",
+        "yellow_threshold": 1,
+        "red_threshold": 5
+      },
+      "503": {
+        "type": "aggregate",
+        "query": "env:ulp-prod status:error @http.status_code:503 service:elb",
+        "red_threshold": 1,
+        "manual_threshold": 1
+      },
+      "oom": {
+        "type": "event",
+        "query": "env:ulp-prod status:error (OutOfMemoryError OR \"out of memory\" OR OOM)",
+        "red_threshold": 1
+      },
+      "failed_fm_jobs": {
+        "type": "log",
+        "query": "kube_namespace:*ktrs run_job.sh result for job failed env:ulp-prod",
+        "manual_threshold": 2, 
+        "yellow_threshold": 1,
+        "red_threshold": 2
+      },
+      "core.allocore.com": {
+        "type": "synthetic",
+        "query": "bsi-2qz-vvt",
+        "red_threshold": 1
+      }
+    }
+  },
+  {
+    "name": "CLS",
+    "API_KEY": "DD_ULP_API_KEY",
+    "APP_KEY": "DD_ULP_APP_KEY",
+    "queries": {
+      "504": {
+        "type": "aggregate",
+        "query": "env:cls-prod status:error @http.status_code:504 service:elb",
+        "manual_threshold": 1, 
+        "yellow_threshold": 2,
+        "red_threshold": 5
+      },
+      "502": {
+        "type": "aggregate",
+        "query": "env:cls-prod status:error @http.status_code:502 service:elb",
+        "yellow_threshold": 2,
+        "red_threshold": 5
+      },
+      "503": {
+        "type": "aggregate",
+        "query": "env:cls-prod status:error @http.status_code:503 service:elb",
+        "red_threshold": 1,
+        "manual_threshold": 1
+      },
+      "oom": {
+        "type": "event",
+        "query": "env:cls-prod status:error (OutOfMemoryError OR \"out of memory\" OR OOM)",
+        "yellow_threshold": 1,
+        "red_threshold": 2
+      },
+      "failed_fm_jobs": {
+        "type": "log",
+        "query": "kube_namespace:*ktrs run_job.sh result for job failed env:cls-prod",
+        "manual_threshold": 2,
+        "yellow_threshold": 1,
+        "red_threshold": 2
+      }
+    }
+  },
+  {
+    "name": "LOS",
+    "API_KEY": "DD_LOS_API_KEY",
+    "APP_KEY": "DD_LOS_APP_KEY",
+    "queries": {
+      "504": {
+        "type": "aggregate",
+        "query": "env:prod status:error @http.status_code:504",
+        "manual_threshold": 7, 
+        "yellow_threshold": 1,
+        "red_threshold": 6
+      },
+      "502": {
+        "type": "aggregate",
+        "query": "env:prod status:error @http.status_code:502",
+        "yellow_threshold": 2,
+        "red_threshold": 8
+      },
+      "503": {
+        "type": "aggregate",
+        "query": "env:prod status:error @http.status_code:503",
+        "red_threshold": 1,
+        "manual_threshold": 1
+      },
+      "oom": {
+        "type": "event",
+        "query": "env:prod status:error (OutOfMemoryError OR \"out of memory\" OR OOM)",
+        "yellow_threshold": 1,
+        "red_threshold": 2
+      },
+      "failed_fm_jobs": {
+        "type": "log",
+        "query": "kube_namespace:*ktrs run_job.sh result for job failed env:los-prod",
+        "manual_threshold": 1, 
+        "yellow_threshold": 1,
+        "red_threshold": 2
+      }
+    }
+  },
+  {
+    "name": "URIF",
+    "API_KEY": "DD_CORE_API_KEY",
+    "APP_KEY": "DD_CORE_APP_KEY",
+    "queries": {
+      "504": {
+        "type": "aggregate",
+        "query": "env:(urif-prod OR urif-prod-main) status:error @http.status_code:504",
+        "red_threshold": 1
+      },
+      "502": {
+        "type": "aggregate",
+        "query": "env:(urif-prod OR urif-prod-main) status:error @http.status_code:502",
+        "red_threshold": 1
+      },
+      "503": {
+        "type": "aggregate",
+        "query": "env:(urif-prod OR urif-prod-main) status:error @http.status_code:503",
+        "red_threshold": 1,
+        "manual_threshold": 1
+      },
+      "oom": {
+        "type": "event",
+        "query": "env:(urif-prod OR urif-prod-main) status:error (OutOfMemoryError OR \"out of memory\" OR OOM)",
+        "red_threshold": 1
+      },
+      "urifinvest": {
+        "type": "synthetic",
+        "query": "jrd-tg4-3gt",
+        "red_threshold": 1
+      }
+    }
+  },
+  {
+    "name": "USALending",
+    "API_KEY": "DD_CORE_API_KEY",
+    "APP_KEY": "DD_CORE_APP_KEY",
+    "queries": {
+      "504": {
+        "type": "aggregate",
+        "query": "env:(usalending-prod OR usalending-prod-main) status:error @http.status_code:504",
+        "red_threshold": 1
+      },
+      "502": {
+        "type": "aggregate",
+        "query": "env:(usalending-prod OR usalending-prod-main) status:error @http.status_code:502",
+        "red_threshold": 1
+      },
+      "503": {
+        "type": "aggregate",
+        "query": "env:(usalending-prod OR usalending-prod-main) status:error @http.status_code:503",
+        "red_threshold": 1,
+        "manual_threshold": 1
+      },
+      "oom": {
+        "type": "event",
+        "query": "env:(usalending-prod OR usalending-prod-main) status:error (OutOfMemoryError OR \"out of memory\" OR OOM)",
+        "red_threshold": 1
+      },
+      "usalending": {
+        "type": "synthetic",
+        "query": "fnp-uqa-mx7",
+        "red_threshold": 1
+      }
+    }
+  },
+  {
+    "name": "ACE",
+    "API_KEY": "DD_ACE_API_KEY",
+    "APP_KEY": "DD_ACE_APP_KEY",
+    "queries": {
+      "504": {
+        "type": "aggregate",
+        "query": "env:ace-prod status:error @http.status_code:504",
+        "red_threshold": 1
+      },
+      "502": {
+        "type": "aggregate",
+        "query": "env:ace-prod status:error @http.status_code:502",
+        "red_threshold": 1
+      },
+      "503": {
+        "type": "aggregate",
+        "query": "env:ace-prod status:error @http.status_code:503",
+        "red_threshold": 1,
+        "manual_threshold": 1
+      },
+      "oom": {
+        "type": "event",
+        "query": "env:ace-prod status:error (OutOfMemoryError OR \"out of memory\" OR OOM)",
+        "red_threshold": 1
+      }
+    }
+  }
+]
 
 def identify_unique_filemover_jobs(log_results: dict[str, Result]) -> set[str]:
     unique_jobs: dict[str, int] = {}
@@ -50,14 +268,14 @@ def upload_report_to_s3(config: AppConfig, report_path: str) -> None:
     print(f"Report uploaded to S3: s3://{config.s3_bucket}/{s3_key}")
 
 def run_job(config: AppConfig) -> None:
-    all_env_data = EnvDataFactory.from_json_file(config.query_path, config.time_from, config.time_to)
+    all_env_data = EnvDataFactory.from_static(QUERIES, config.time_from, config.time_to)
 
     for env in all_env_data:
         if env.log_results.get('failed_fm_jobs'):
             env.filtered_fm_jobs = identify_unique_filemover_jobs(env.log_results.get('failed_fm_jobs', {}))
     
-    report_path = build_report(config, all_env_data)
-    upload_report_to_s3(config, report_path)
-    messenger = SlackMessenger(all_env_data, token=os.getenv("SLACK_API_KEY"), channel_id=config.output_channel_id)
+    # report_path = build_report(config, all_env_data)
+    # upload_report_to_s3(config, report_path)
+    messenger = SlackMessenger(all_env_data)
     messenger.build_message()
-    messenger.send_message()
+    send_slack_message(messenger.message_blocks, config.output_channel_id, os.getenv("SLACK_API_KEY"))

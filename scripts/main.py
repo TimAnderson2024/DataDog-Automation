@@ -2,14 +2,14 @@
 
 import os
 import sys
-import app_config
 
+from app_config import AppConfig
 from dotenv import load_dotenv
 from run_job import run_job
 
 def main():
     load_dotenv()
-    config = app_config.load_config(os.getenv("CONFIG_PATH"))
+    config = AppConfig()
     run_job(config)
 
     return 0

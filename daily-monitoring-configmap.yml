@@ -9,14 +9,8 @@ metadata:
 
 data:
   app_config.py: |-
-    import json
-    
-    from dataclasses import dataclass
     from pathlib import Path
     
-    CONFIG_PATH = Path("config/config.json")
-    
-    @dataclass
     class AppConfig:
         time_from: str
         time_to: str
@@ -27,20 +21,312 @@ data:
         s3_bucket: str
         s3_key_prefix: str
     
-    def load_config(path) -> AppConfig:
-        with open(path, "r") as f:
-            data = json.load(f)
+        def __init__(self):
+            self.time_from = "now-24h"
+            self.time_to = "now"
+            self.query_path = Path("queries.json")
+            self.template_path = Path("slack_template.md")
+            self.output_channel_id = "C0ALY9QJ30T"
+            self.s3_bucket = "daily-monitoring-report-539578862955-us-east-2-an"
+            self.s3_key_prefix = "reports/"
+
+  external_helpers.py: |-
+    import json
+    import base64
+    import logging
+    from typing import List, Dict
     
-        return AppConfig(
-            time_from=data["TIME_FROM"],
-            time_to=data["TIME_TO"],
-            query_path=Path(data["QUERY_PATH"]),
-            output_path=Path(data["OUTPUT_PATH"]),  
-            template_path=Path(data["TEMPLATE_PATH"]),
-            output_channel_id=data["OUTPUT_CHANNEL_ID"],
-            s3_bucket=data["S3_BUCKET"],
-            s3_key_prefix=data["S3_KEY_PREFIX"]
-        )
+    import boto3
+    import requests
+    
+    logger = logging.getLogger(__name__)
+    
+    __all__ = ["get_aws_secrets_helper", "send_slack_message"]
+    
+    
+    def get_aws_secrets_helper(aws_secret_ids: List[str], aws_region_name: str) -> Dict[str, Dict[str, str]]:
+        """Fetch multiple AWS Secrets Manager secrets as a nested dict.
+    
+        Returns:
+            {
+                "<secret_id>": { ...secret JSON... },
+                ...
+            }
+    
+        Raises:
+            TypeError: If a secret isn't a JSON object.
+            JSONDecodeError / ClientError: For invalid JSON or AWS issues.
+        """
+        session = boto3.session.Session()
+        client = session.client(service_name="secretsmanager", region_name=aws_region_name)
+    
+        results: Dict[str, Dict[str, str]] = {}
+    
+        for secret_id in aws_secret_ids:
+            resp = client.get_secret_value(SecretId=secret_id)
+            raw = resp.get("SecretString")
+            if raw is None:
+                raw = base64.b64decode(resp.get("SecretBinary", b"")).decode("utf-8")
+    
+            data = json.loads(raw) if raw else {}
+            results[secret_id] = data
+    
+        logger.info("Successfully loaded %d secret(s).", len(results))
+        return results
+    
+    
+    def send_slack_message(notification_message: str, slack_channel: str, slack_bot_token: str) -> None:
+        """Send a formatted message to a Slack channel via Slack Web API.
+    
+        Logs outcomes; raises on transport-level errors.
+        """
+        payload = {"channel": slack_channel}
+    
+        if isinstance(notification_message, list): 
+            payload["blocks"] = notification_message
+        else:
+            payload = {
+                "blocks": [
+                    {"type": "section", "text": {"type": "mrkdwn", "text": notification_message, "verbatim": True}}
+                ],
+            }
+    
+        try:
+            response = requests.post(
+                "https://slack.com/api/chat.postMessage",
+                headers={"Content-Type": "application/json", "Authorization": f"Bearer {slack_bot_token}"},
+                json=payload,
+                timeout=10,
+            )
+            response.raise_for_status()
+            result = response.json()
+    
+            if result.get("ok"):
+                logger.info("Message sent to Slack channel '%s'.", slack_channel)
+            else:
+                logger.warning("Slack API error for channel '%s': %s", slack_channel, result.get("error", "unknown"))
+    
+        except requests.exceptions.RequestException as exc:
+            logger.error("Failed to send Slack message: %s", exc)
+            raise
+
+  queries.json: |-
+    [
+      {
+        "name": "ULP",
+        "API_KEY": "DD_ULP_API_KEY",
+        "APP_KEY": "DD_ULP_APP_KEY",
+        "queries": {
+          "504": {
+            "type": "aggregate",
+            "query": "env:ulp-prod status:error @http.status_code:504 service:elb",
+            "yellow_threshold": 35,
+            "red_threshold": 55
+          },
+          "502": {
+            "type": "aggregate",
+            "query": "env:ulp-prod status:error @http.status_code:502 service:elb",
+            "yellow_threshold": 1,
+            "red_threshold": 5
+          },
+          "503": {
+            "type": "aggregate",
+            "query": "env:ulp-prod status:error @http.status_code:503 service:elb",
+            "red_threshold": 1,
+            "manual_threshold": 1
+          },
+          "oom": {
+            "type": "event",
+            "query": "env:ulp-prod status:error (OutOfMemoryError OR \"out of memory\" OR OOM)",
+            "red_threshold": 1
+          },
+          "failed_fm_jobs": {
+            "type": "log",
+            "query": "kube_namespace:*ktrs run_job.sh result for job failed env:ulp-prod",
+            "manual_threshold": 2, 
+            "yellow_threshold": 1,
+            "red_threshold": 2
+          },
+          "core.allocore.com": {
+            "type": "synthetic",
+            "query": "bsi-2qz-vvt",
+            "red_threshold": 1
+          }
+        }
+      },
+      {
+        "name": "CLS",
+        "API_KEY": "DD_ULP_API_KEY",
+        "APP_KEY": "DD_ULP_APP_KEY",
+        "queries": {
+          "504": {
+            "type": "aggregate",
+            "query": "env:cls-prod status:error @http.status_code:504 service:elb",
+            "manual_threshold": 1, 
+            "yellow_threshold": 2,
+            "red_threshold": 5
+          },
+          "502": {
+            "type": "aggregate",
+            "query": "env:cls-prod status:error @http.status_code:502 service:elb",
+            "yellow_threshold": 2,
+            "red_threshold": 5
+          },
+          "503": {
+            "type": "aggregate",
+            "query": "env:cls-prod status:error @http.status_code:503 service:elb",
+            "red_threshold": 1,
+            "manual_threshold": 1
+          },
+          "oom": {
+            "type": "event",
+            "query": "env:cls-prod status:error (OutOfMemoryError OR \"out of memory\" OR OOM)",
+            "yellow_threshold": 1,
+            "red_threshold": 2
+          },
+          "failed_fm_jobs": {
+            "type": "log",
+            "query": "kube_namespace:*ktrs run_job.sh result for job failed env:cls-prod",
+            "manual_threshold": 2,
+            "yellow_threshold": 1,
+            "red_threshold": 2
+          }
+        }
+      },
+      {
+        "name": "LOS",
+        "API_KEY": "DD_LOS_API_KEY",
+        "APP_KEY": "DD_LOS_APP_KEY",
+        "queries": {
+          "504": {
+            "type": "aggregate",
+            "query": "env:prod status:error @http.status_code:504",
+            "manual_threshold": 7, 
+            "yellow_threshold": 1,
+            "red_threshold": 6
+          },
+          "502": {
+            "type": "aggregate",
+            "query": "env:prod status:error @http.status_code:502",
+            "yellow_threshold": 2,
+            "red_threshold": 8
+          },
+          "503": {
+            "type": "aggregate",
+            "query": "env:prod status:error @http.status_code:503",
+            "red_threshold": 1,
+            "manual_threshold": 1
+          },
+          "oom": {
+            "type": "event",
+            "query": "env:prod status:error (OutOfMemoryError OR \"out of memory\" OR OOM)",
+            "yellow_threshold": 1,
+            "red_threshold": 2
+          },
+          "failed_fm_jobs": {
+            "type": "log",
+            "query": "kube_namespace:*ktrs run_job.sh result for job failed env:los-prod",
+            "manual_threshold": 1, 
+            "yellow_threshold": 1,
+            "red_threshold": 2
+          }
+        }
+      },
+      {
+        "name": "URIF",
+        "API_KEY": "DD_CORE_API_KEY",
+        "APP_KEY": "DD_CORE_APP_KEY",
+        "queries": {
+          "504": {
+            "type": "aggregate",
+            "query": "env:(urif-prod OR urif-prod-main) status:error @http.status_code:504",
+            "red_threshold": 1
+          },
+          "502": {
+            "type": "aggregate",
+            "query": "env:(urif-prod OR urif-prod-main) status:error @http.status_code:502",
+            "red_threshold": 1
+          },
+          "503": {
+            "type": "aggregate",
+            "query": "env:(urif-prod OR urif-prod-main) status:error @http.status_code:503",
+            "red_threshold": 1,
+            "manual_threshold": 1
+          },
+          "oom": {
+            "type": "event",
+            "query": "env:(urif-prod OR urif-prod-main) status:error (OutOfMemoryError OR \"out of memory\" OR OOM)",
+            "red_threshold": 1
+          },
+          "urifinvest": {
+            "type": "synthetic",
+            "query": "jrd-tg4-3gt",
+            "red_threshold": 1
+          }
+        }
+      },
+      {
+        "name": "USALending",
+        "API_KEY": "DD_CORE_API_KEY",
+        "APP_KEY": "DD_CORE_APP_KEY",
+        "queries": {
+          "504": {
+            "type": "aggregate",
+            "query": "env:(usalending-prod OR usalending-prod-main) status:error @http.status_code:504",
+            "red_threshold": 1
+          },
+          "502": {
+            "type": "aggregate",
+            "query": "env:(usalending-prod OR usalending-prod-main) status:error @http.status_code:502",
+            "red_threshold": 1
+          },
+          "503": {
+            "type": "aggregate",
+            "query": "env:(usalending-prod OR usalending-prod-main) status:error @http.status_code:503",
+            "red_threshold": 1,
+            "manual_threshold": 1
+          },
+          "oom": {
+            "type": "event",
+            "query": "env:(usalending-prod OR usalending-prod-main) status:error (OutOfMemoryError OR \"out of memory\" OR OOM)",
+            "red_threshold": 1
+          },
+          "usalending": {
+            "type": "synthetic",
+            "query": "fnp-uqa-mx7",
+            "red_threshold": 1
+          }
+        }
+      },
+      {
+        "name": "ACE",
+        "API_KEY": "DD_ACE_API_KEY",
+        "APP_KEY": "DD_ACE_APP_KEY",
+        "queries": {
+          "504": {
+            "type": "aggregate",
+            "query": "env:ace-prod status:error @http.status_code:504",
+            "red_threshold": 1
+          },
+          "502": {
+            "type": "aggregate",
+            "query": "env:ace-prod status:error @http.status_code:502",
+            "red_threshold": 1
+          },
+          "503": {
+            "type": "aggregate",
+            "query": "env:ace-prod status:error @http.status_code:503",
+            "red_threshold": 1,
+            "manual_threshold": 1
+          },
+          "oom": {
+            "type": "event",
+            "query": "env:ace-prod status:error (OutOfMemoryError OR \"out of memory\" OR OOM)",
+            "red_threshold": 1
+          }
+        }
+      }
+    ]
 
   time_utils.py: |-
     from datetime import datetime, timedelta, timezone
@@ -316,7 +602,6 @@ data:
     
     from datadog_api_client import Configuration
     
-    
     class Result:
         name: str
         query: str
@@ -468,10 +753,9 @@ data:
             "event": q.query_events,
         }
     
-        def _envdata_factory(json_config: dict, start: str, end: str):
-            env_data = EnvData(json_config, start, end)
+        def _envdata_factory(env_config: dict, queries: dict, start: str, end: str):
+            env_data = EnvData(env_config, start, end)
     
-            queries: dict = json_config.get("queries")
             for query_name, query_config in queries.items():
                 query_config: dict
                 query_type = query_config.get("type")
@@ -508,22 +792,19 @@ data:
             return env_data
     
         @classmethod
-        def from_json_file(
+        def from_static(
             cls,
-            path: str,
+            json_queries: dict,
             start: str,
             end: str,
         ) -> list[EnvData]:
-            with open(path) as f:
-                json_config: dict = json.load(f)
-    
             env_data_series: list = []
-            if type(json_config) is list:
-                for env in json_config:
-                    env_data_series.append(EnvDataFactory._envdata_factory(env, start, end))
+            if type(json_queries) is list:
+                for env in json_queries:
+                    env_data_series.append(EnvDataFactory._envdata_factory(env, env["queries"], start, end))
             else:
                 env_data_series.append(
-                    EnvDataFactory._envdata_factory(json_config, start, end)
+                    EnvDataFactory._envdata_factory(env, env["queries"], start, end)
                 )
     
             return env_data_series
@@ -532,45 +813,15 @@ data:
     from env_data import EnvData, Result
     from datetime import date
     
-    from slack_sdk import WebClient
-    from slack_sdk.errors import SlackApiError
-    
     class SlackMessenger:
         data: dict[EnvData]
         message_blocks: list[dict]
         token: str
         channel_id: str
     
-        def __init__(self, all_env_data: dict[EnvData], token: str, channel_id: str):
+        def __init__(self, all_env_data: dict[EnvData]):
             self.data = all_env_data
             self.message_blocks = []
-            self.token = token
-            self.channel_id = channel_id
-    
-        def send_message(self):
-            if not self.token:
-                raise ValueError("SLACK_API_KEY is not set")
-            
-            if not self.channel_id:
-                raise ValueError("OUTPUT_CHANNEL_ID is not set")
-            
-            client = WebClient(self.token)
-            try:
-                auth_response = client.auth_test()
-                print(
-                    f"Authenticated to Slack as '{auth_response['user']}' in workspace '{auth_response['team']}'"
-                )
-    
-                response = client.chat_postMessage(
-                    channel=self.channel_id,
-                    blocks=self.message_blocks,
-                )
-    
-                print(f"Slack message sent successfully. ts={response['ts']}")
-    
-            except SlackApiError as e:
-                print(f"Slack API error: {e.response['error']}")
-                raise
         
         def build_message(self):
             self.build_header()
@@ -737,6 +988,224 @@ data:
     from env_data import EnvData, EnvData, EnvDataFactory, Result
     from app_config import AppConfig
     from slack_messenger import SlackMessenger
+    from external_helpers import send_slack_message
+    
+    QUERIES = [
+      {
+        "name": "ULP",
+        "API_KEY": "DD_ULP_API_KEY",
+        "APP_KEY": "DD_ULP_APP_KEY",
+        "queries": {
+          "504": {
+            "type": "aggregate",
+            "query": "env:ulp-prod status:error @http.status_code:504 service:elb",
+            "yellow_threshold": 35,
+            "red_threshold": 55
+          },
+          "502": {
+            "type": "aggregate",
+            "query": "env:ulp-prod status:error @http.status_code:502 service:elb",
+            "yellow_threshold": 1,
+            "red_threshold": 5
+          },
+          "503": {
+            "type": "aggregate",
+            "query": "env:ulp-prod status:error @http.status_code:503 service:elb",
+            "red_threshold": 1,
+            "manual_threshold": 1
+          },
+          "oom": {
+            "type": "event",
+            "query": "env:ulp-prod status:error (OutOfMemoryError OR \"out of memory\" OR OOM)",
+            "red_threshold": 1
+          },
+          "failed_fm_jobs": {
+            "type": "log",
+            "query": "kube_namespace:*ktrs run_job.sh result for job failed env:ulp-prod",
+            "manual_threshold": 2, 
+            "yellow_threshold": 1,
+            "red_threshold": 2
+          },
+          "core.allocore.com": {
+            "type": "synthetic",
+            "query": "bsi-2qz-vvt",
+            "red_threshold": 1
+          }
+        }
+      },
+      {
+        "name": "CLS",
+        "API_KEY": "DD_ULP_API_KEY",
+        "APP_KEY": "DD_ULP_APP_KEY",
+        "queries": {
+          "504": {
+            "type": "aggregate",
+            "query": "env:cls-prod status:error @http.status_code:504 service:elb",
+            "manual_threshold": 1, 
+            "yellow_threshold": 2,
+            "red_threshold": 5
+          },
+          "502": {
+            "type": "aggregate",
+            "query": "env:cls-prod status:error @http.status_code:502 service:elb",
+            "yellow_threshold": 2,
+            "red_threshold": 5
+          },
+          "503": {
+            "type": "aggregate",
+            "query": "env:cls-prod status:error @http.status_code:503 service:elb",
+            "red_threshold": 1,
+            "manual_threshold": 1
+          },
+          "oom": {
+            "type": "event",
+            "query": "env:cls-prod status:error (OutOfMemoryError OR \"out of memory\" OR OOM)",
+            "yellow_threshold": 1,
+            "red_threshold": 2
+          },
+          "failed_fm_jobs": {
+            "type": "log",
+            "query": "kube_namespace:*ktrs run_job.sh result for job failed env:cls-prod",
+            "manual_threshold": 2,
+            "yellow_threshold": 1,
+            "red_threshold": 2
+          }
+        }
+      },
+      {
+        "name": "LOS",
+        "API_KEY": "DD_LOS_API_KEY",
+        "APP_KEY": "DD_LOS_APP_KEY",
+        "queries": {
+          "504": {
+            "type": "aggregate",
+            "query": "env:prod status:error @http.status_code:504",
+            "manual_threshold": 7, 
+            "yellow_threshold": 1,
+            "red_threshold": 6
+          },
+          "502": {
+            "type": "aggregate",
+            "query": "env:prod status:error @http.status_code:502",
+            "yellow_threshold": 2,
+            "red_threshold": 8
+          },
+          "503": {
+            "type": "aggregate",
+            "query": "env:prod status:error @http.status_code:503",
+            "red_threshold": 1,
+            "manual_threshold": 1
+          },
+          "oom": {
+            "type": "event",
+            "query": "env:prod status:error (OutOfMemoryError OR \"out of memory\" OR OOM)",
+            "yellow_threshold": 1,
+            "red_threshold": 2
+          },
+          "failed_fm_jobs": {
+            "type": "log",
+            "query": "kube_namespace:*ktrs run_job.sh result for job failed env:los-prod",
+            "manual_threshold": 1, 
+            "yellow_threshold": 1,
+            "red_threshold": 2
+          }
+        }
+      },
+      {
+        "name": "URIF",
+        "API_KEY": "DD_CORE_API_KEY",
+        "APP_KEY": "DD_CORE_APP_KEY",
+        "queries": {
+          "504": {
+            "type": "aggregate",
+            "query": "env:(urif-prod OR urif-prod-main) status:error @http.status_code:504",
+            "red_threshold": 1
+          },
+          "502": {
+            "type": "aggregate",
+            "query": "env:(urif-prod OR urif-prod-main) status:error @http.status_code:502",
+            "red_threshold": 1
+          },
+          "503": {
+            "type": "aggregate",
+            "query": "env:(urif-prod OR urif-prod-main) status:error @http.status_code:503",
+            "red_threshold": 1,
+            "manual_threshold": 1
+          },
+          "oom": {
+            "type": "event",
+            "query": "env:(urif-prod OR urif-prod-main) status:error (OutOfMemoryError OR \"out of memory\" OR OOM)",
+            "red_threshold": 1
+          },
+          "urifinvest": {
+            "type": "synthetic",
+            "query": "jrd-tg4-3gt",
+            "red_threshold": 1
+          }
+        }
+      },
+      {
+        "name": "USALending",
+        "API_KEY": "DD_CORE_API_KEY",
+        "APP_KEY": "DD_CORE_APP_KEY",
+        "queries": {
+          "504": {
+            "type": "aggregate",
+            "query": "env:(usalending-prod OR usalending-prod-main) status:error @http.status_code:504",
+            "red_threshold": 1
+          },
+          "502": {
+            "type": "aggregate",
+            "query": "env:(usalending-prod OR usalending-prod-main) status:error @http.status_code:502",
+            "red_threshold": 1
+          },
+          "503": {
+            "type": "aggregate",
+            "query": "env:(usalending-prod OR usalending-prod-main) status:error @http.status_code:503",
+            "red_threshold": 1,
+            "manual_threshold": 1
+          },
+          "oom": {
+            "type": "event",
+            "query": "env:(usalending-prod OR usalending-prod-main) status:error (OutOfMemoryError OR \"out of memory\" OR OOM)",
+            "red_threshold": 1
+          },
+          "usalending": {
+            "type": "synthetic",
+            "query": "fnp-uqa-mx7",
+            "red_threshold": 1
+          }
+        }
+      },
+      {
+        "name": "ACE",
+        "API_KEY": "DD_ACE_API_KEY",
+        "APP_KEY": "DD_ACE_APP_KEY",
+        "queries": {
+          "504": {
+            "type": "aggregate",
+            "query": "env:ace-prod status:error @http.status_code:504",
+            "red_threshold": 1
+          },
+          "502": {
+            "type": "aggregate",
+            "query": "env:ace-prod status:error @http.status_code:502",
+            "red_threshold": 1
+          },
+          "503": {
+            "type": "aggregate",
+            "query": "env:ace-prod status:error @http.status_code:503",
+            "red_threshold": 1,
+            "manual_threshold": 1
+          },
+          "oom": {
+            "type": "event",
+            "query": "env:ace-prod status:error (OutOfMemoryError OR \"out of memory\" OR OOM)",
+            "red_threshold": 1
+          }
+        }
+      }
+    ]
     
     def identify_unique_filemover_jobs(log_results: dict[str, Result]) -> set[str]:
         unique_jobs: dict[str, int] = {}
@@ -780,31 +1249,31 @@ data:
         print(f"Report uploaded to S3: s3://{config.s3_bucket}/{s3_key}")
     
     def run_job(config: AppConfig) -> None:
-        all_env_data = EnvDataFactory.from_json_file(config.query_path, config.time_from, config.time_to)
+        all_env_data = EnvDataFactory.from_static(QUERIES, config.time_from, config.time_to)
     
         for env in all_env_data:
             if env.log_results.get('failed_fm_jobs'):
                 env.filtered_fm_jobs = identify_unique_filemover_jobs(env.log_results.get('failed_fm_jobs', {}))
         
-        report_path = build_report(config, all_env_data)
-        upload_report_to_s3(config, report_path)
-        messenger = SlackMessenger(all_env_data, token=os.getenv("SLACK_API_KEY"), channel_id=config.output_channel_id)
+        # report_path = build_report(config, all_env_data)
+        # upload_report_to_s3(config, report_path)
+        messenger = SlackMessenger(all_env_data)
         messenger.build_message()
-        messenger.send_message()
+        send_slack_message(messenger.message_blocks, config.output_channel_id, os.getenv("SLACK_API_KEY"))
 
   main.py: |-
     #!/usr/bin/env python
     
     import os
     import sys
-    import app_config
     
+    from app_config import AppConfig
     from dotenv import load_dotenv
     from run_job import run_job
     
     def main():
         load_dotenv()
-        config = app_config.load_config(os.getenv("CONFIG_PATH"))
+        config = AppConfig()
         run_job(config)
     
         return 0

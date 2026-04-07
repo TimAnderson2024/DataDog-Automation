@@ -6,7 +6,6 @@ import time_utils
 
 from datadog_api_client import Configuration
 
-
 class Result:
     name: str
     query: str
@@ -158,10 +157,9 @@ class EnvDataFactory:
         "event": q.query_events,
     }
 
-    def _envdata_factory(json_config: dict, start: str, end: str):
-        env_data = EnvData(json_config, start, end)
+    def _envdata_factory(env_config: dict, queries: dict, start: str, end: str):
+        env_data = EnvData(env_config, start, end)
 
-        queries: dict = json_config.get("queries")
         for query_name, query_config in queries.items():
             query_config: dict
             query_type = query_config.get("type")
@@ -198,22 +196,19 @@ class EnvDataFactory:
         return env_data
 
     @classmethod
-    def from_json_file(
+    def from_static(
         cls,
-        path: str,
+        json_queries: dict,
         start: str,
         end: str,
     ) -> list[EnvData]:
-        with open(path) as f:
-            json_config: dict = json.load(f)
-
         env_data_series: list = []
-        if type(json_config) is list:
-            for env in json_config:
-                env_data_series.append(EnvDataFactory._envdata_factory(env, start, end))
+        if type(json_queries) is list:
+            for env in json_queries:
+                env_data_series.append(EnvDataFactory._envdata_factory(env, env["queries"], start, end))
         else:
             env_data_series.append(
-                EnvDataFactory._envdata_factory(json_config, start, end)
+                EnvDataFactory._envdata_factory(env, env["queries"], start, end)
             )
 
         return env_data_series
