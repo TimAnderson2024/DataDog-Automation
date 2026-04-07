@@ -22,8 +22,8 @@ def py_files(directory: Path) -> Iterable[Path]:
         if p.is_file():
             yield p
 
-    # Include queries.json and slack_template.md if present
-    for extra in ("queries.json", "slack_template.md"):
+    # Include queries.json, slack_template.md and .env if present
+    for extra in ("queries.json", "slack_template.md", ".env"):
         p = directory / extra
         if p.exists() and p.is_file():
             yield p

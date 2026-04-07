@@ -1,5 +1,4 @@
 from datetime import datetime, timedelta, timezone
-from zoneinfo import ZoneInfo
 import re
 
 def iso_to_unix_milliseconds(iso_time: str) -> int:
@@ -23,15 +22,66 @@ def time_range_iso_hours_ago(hours_ago: int) -> str:
     time_from = time_to - timedelta(hours=hours_ago)
     return time_from.isoformat(), time_to.isoformat()
 
+def _second_sunday_of_march(year: int) -> datetime:
+    d = datetime(year, 3, 1)
+    # weekday(): Mon=0 .. Sun=6 -> find first Sunday, then add 7 days
+    first_sunday = 1 + ((6 - d.weekday()) % 7)
+    second_sunday = first_sunday + 7
+    return datetime(year, 3, second_sunday, 2, 0, 0)
+
+def _first_sunday_of_november(year: int) -> datetime:
+    d = datetime(year, 11, 1)
+    first_sunday = 1 + ((6 - d.weekday()) % 7)
+    return datetime(year, 11, first_sunday, 2, 0, 0)
+
+def _is_eastern_dst(utc_dt: datetime) -> bool:
+    # utc_dt must be timezone-naive UTC (or use utc_dt.replace(tzinfo=timezone.utc))
+    year = utc_dt.year
+    # transitions are defined in local wall time (Eastern). We'll compute their UTC instants.
+    # Standard offset = -5, DST offset = -4
+    std_offset = timedelta(hours=-5)
+    dst_offset = timedelta(hours=-4)
+
+    # local transition datetimes (wall clock) at 02:00 local
+    start_local = _second_sunday_of_march(year)  # 02:00 local standard -> becomes 03:00 local DST
+    end_local = _first_sunday_of_november(year)  # 02:00 local DST -> becomes 01:00 local standard
+
+    # Convert those local times to UTC instants:
+    # - start_local happens while standard time was in effect (before spring forward): UTC = local - std_offset
+    start_utc = (start_local - std_offset)
+    # - end_local happens while DST was in effect: UTC = local - dst_offset
+    end_utc = (end_local - dst_offset)
+
+    # If DST window crosses year boundary (it doesn't for US rules), handle normally
+    return start_utc <= utc_dt < end_utc
+
 def unix_to_iso(unix_time: int | float) -> str:
     unix_time = float(unix_time)
-
-    # Heuristic: anything above ~1e12 is almost certainly ms since epoch
     if unix_time > 1_000_000_000_000:
         unix_time /= 1000.0
 
-    dt = datetime.fromtimestamp(unix_time, tz=ZoneInfo("America/New_York"))
-    return dt.strftime("%b %#d, %Y at %#I:%M %p est")
+    # get UTC datetime (naive) for decision making
+    utc_dt = datetime.utcfromtimestamp(unix_time)
+
+    if _is_eastern_dst(utc_dt):
+        offset = timedelta(hours=-4)
+        label = "edt"
+    else:
+        offset = timedelta(hours=-5)
+        label = "est"
+
+    # create aware datetime using computed offset and format without platform-specific flags
+    tz = timezone(offset)
+    dt = datetime.fromtimestamp(unix_time, tz=tz)
+
+    # Build a portable formatted string (avoid %-d / %#d portability issues)
+    month = dt.strftime("%b")
+    day = dt.day
+    year = dt.year
+    hour = dt.strftime("%I").lstrip("0") or "0"
+    minute = dt.strftime("%M")
+    ampm = dt.strftime("%p")
+    return f"{month} {day}, {year} at {hour}:{minute} {ampm} {label}"
 
 _UNIT_MS = {
     "s": 1000,
