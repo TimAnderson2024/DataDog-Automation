@@ -13,8 +13,7 @@ from external_helpers import get_aws_secrets_helper, send_slack_message
 
 logger = logging.getLogger(__name__)
 
-JINJA_TEMPLATE = Template(
-    """
+JINJA_TEMPLATE = """
     {%- for env in data %}
     *[[ env.env ]]*
     {%- if env._errs is defined and env._errs %}
@@ -40,7 +39,6 @@ JINJA_TEMPLATE = Template(
     {%- endif %}
     {% endfor %}
     """
-)
 
 QUERIES = [
   {
