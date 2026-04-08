@@ -67,6 +67,7 @@ def query_logs(dd_config: Configuration, query_string: str, time_range: tuple[in
         logs_processed = 0
         while True:
             response = api_instance.list_logs(body=query_body)
+            print(response)
             response_data = response.data
             response_metadata = response.meta.to_dict()
 

@@ -1,13 +1,46 @@
-from datetime import date
+import logging
 import os
 import boto3
 
-from jinja2 import Template
+from jinja2 import Environment
 
+from datetime import date
+from string import Template
 from env_data import EnvData, EnvData, EnvDataFactory, Result
 from app_config import AppConfig
 from slack_messenger import SlackMessenger
 from external_helpers import get_aws_secrets_helper, send_slack_message
+
+logger = logging.getLogger(__name__)
+
+JINJA_TEMPLATE = Template(
+    """
+    {%- for env in data %}
+    *[[ env.env ]]*
+    {%- if env._errs is defined and env._errs %}
+    {%- for err_type, result in env._errs.items() %}
+    - *[[ err_type ]]*: [[ result.aggregate ]]
+    {%- endfor %}
+    {%- endif %}
+    {%- if env.event_results is defined and env.event_results %}
+    {%- for event, result in env.event_results.items() %}
+    - *[[ event ]]*: [[ result.aggregate ]]
+    {%- endfor %}
+    {%- endif %}
+    {%- if env.synthetic_results is defined and env.synthetic_results %}
+    {%- for test, result in env.synthetic_results.items() %}
+    - Synthetic test on `[[ result.name ]]`: [[ result.failure_count ]] failures in last 24hr
+    {%- endfor %}
+    {%- endif %}
+    {%- if env.filtered_fm_jobs is defined and env.filtered_fm_jobs %}
+    *Filemover failures in last 24hr:*
+    {%- for failed_job, count in env.filtered_fm_jobs.items() %}
+    - `[[ failed_job ]]:` [[ count ]]
+    {%- endfor %}
+    {%- endif %}
+    {% endfor %}
+    """
+)
 
 QUERIES = [
   {
@@ -237,15 +270,15 @@ def identify_unique_filemover_jobs(log_results: dict[str, Result]) -> set[str]:
     return unique_jobs
 
 def build_report(config: AppConfig, all_env_data: list[EnvData]) -> str:
-    with open(config.template_path) as f:
-        template = Template(f.read())
-
+    jinja_env = Environment(variable_start_string='[[', variable_end_string=']]', keep_trailing_newline=True)
+    template = jinja_env.from_string(JINJA_TEMPLATE)
+    
     output = template.render(
         date=date.today(),
         data=all_env_data
     )
 
-    output_path = config.output_path / f"Business Day Infra Report {date.today()}.md"
+    output_path = f"Business Day Infra Report {date.today()}.md"
 
     with open(output_path, 'w') as out_f:
         out_f.write(output)
@@ -272,10 +305,11 @@ def run_job(config: AppConfig) -> None:
 
     for env in all_env_data:
         if env.log_results.get('failed_fm_jobs'):
+            logging.info("Filemover failures detected for %s, identifying unique jobs...", env.env)
             env.filtered_fm_jobs = identify_unique_filemover_jobs(env.log_results.get('failed_fm_jobs', {}))
     
-    # report_path = build_report(config, all_env_data)
-    # upload_report_to_s3(config, report_path)
+    report_path = build_report(config, all_env_data)
+    upload_report_to_s3(config, report_path)
     messenger = SlackMessenger(all_env_data)
     messenger.build_message()
     
