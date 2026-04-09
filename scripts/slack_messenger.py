@@ -25,8 +25,7 @@ class SlackMessenger:
                 alert_envs["green"].append(env)
 
         # Get manual review results
-        manual_review_envs = [env for env in self.data if getattr(env, "manual_review", False)]
-        self.build_summary(alert_envs, manual_review_envs)
+        self.build_summary()
         self.build_env_breakdowns(alert_envs)
     
     def build_header(self):
@@ -70,8 +69,10 @@ class SlackMessenger:
         return f"🟡 *{env.env}* — " + ", ".join(alert_results)     
 
 
-    def build_summary(self, alert_envs: dict[str, list[EnvData]], manual_review_envs: list[EnvData]):
+    def build_summary(self):
         summary_blocks = []
+        manual_review_envs = [env for env in self.data if getattr(env, "manual_review", False)]
+        no_error_envs = [env for env in self.data if env.no_errors]
 
         if manual_review_envs:
             manual_review_lines = [f"🔎 *{env.env}* — {', '.join(f'{result.name} ({result.aggregate})' for result in env.get_manual_review_results().values())}" for env in manual_review_envs]
@@ -85,13 +86,13 @@ class SlackMessenger:
                 }
             )
 
-        if alert_envs["green"]:
+        if no_error_envs:
             summary_blocks.append(
                 {
                     "type": "section",
                     "text": {
                         "type": "mrkdwn",
-                        "text": f"*No Errors:*\n🟢 *{', '.join(env.env for env in alert_envs['green'])}*"
+                        "text": f"*No Errors:*\n🟢 *{', '.join(env.env for env in no_error_envs)}*"
                     },
                 }
             )
@@ -149,19 +150,20 @@ class SlackMessenger:
         }
 
     def build_env_breakdowns(self, alert_envs: dict[str, list[EnvData]]) -> list[dict]:
-        for env in [*alert_envs["yellow"], *alert_envs["red"]]:
+        error_envs = [env for env in self.data if not env.no_errors]
+
+        for env in error_envs:
             env_block = {
                 "type": "section",
                 "text": {
                     "type": "mrkdwn",
-                    "text": f"*{env.env}*"
+                    "text": f"*{env.env}*",
                 },
                 "fields": self.build_env_fields(env)
             }
 
             self.message_blocks.append(env_block)
             fm_context = self.build_filemover_context(env)
-            print(fm_context)
             if fm_context:
                 self.message_blocks.append(fm_context)
             self.message_blocks.append({"type": "divider"})      

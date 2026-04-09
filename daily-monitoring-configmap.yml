@@ -32,8 +32,8 @@ data:
             self.query_path = Path("queries.json")
             self.template_path = Path("slack_template.md")
             self.output_channel_id = "C0ALY9QJ30T"
+            #self.output_channel_id = "{{ .Values.dailyMonitoring.slackChannelId }}"
             self.s3_bucket = "{{ .Values.dailyMonitoring.s3BucketName }}"
-            self.s3_key_prefix = "reports/"
 
   external_helpers.py: |-
     import json
@@ -471,6 +471,7 @@ data:
 
   query.py: |-
     import os
+    import logging
     from datadog_api_client import ApiClient, Configuration
     
     from datadog_api_client.v1 import Configuration as V1Configuration
@@ -493,6 +494,8 @@ data:
     
     from external_helpers import get_aws_secrets_helper
     import time_utils as time
+    
+    logger = logging.getLogger(__name__)
     
     DATADOG_URL = "datadoghq.com"
     
@@ -539,18 +542,18 @@ data:
             logs_processed = 0
             while True:
                 response = api_instance.list_logs(body=query_body)
-                print(response)
                 response_data = response.data
                 response_metadata = response.meta.to_dict()
     
                 all_logs.extend(response_data)
                 logs_processed += len(response_data)
-                print(f"Processed {logs_processed} log entries...")
+                logger.info(f"Processed {logs_processed} log entries...")
                         
                 if not response_metadata.get('page', None):
                     break
                 query_body.page.cursor = response_metadata['page']['after']
     
+        logger.info(f"Finished processing logs. Total matching entries retrieved: {len(all_logs)}")
         return all_logs
     
     def query_metric(dd_config: V1Configuration, query_string: str, time_range: tuple[int, int]) -> list[dict]:
@@ -593,6 +596,7 @@ data:
                     break
                 query_body.page.cursor = response_metadata['page']['after']
     
+            logger.info(f"Finished processing events. Total matching entries retrieved: {len(all_logs)}")
             return all_logs 
     
     def query_synthetic_test(dd_config: Configuration, test_id: str, time_range) -> dict:
@@ -603,16 +607,13 @@ data:
     
             # Paginate results using last_timestamp_fetched (API output cuts off at 150 results)
             synthetic_test_results = []
-            print(f"Fetching synthetic results from {time.unix_to_iso(time_from)} to {time.unix_to_iso(time_to)}:")
+            logger.info(f"Fetching synthetic results from {time.unix_to_iso(time_from)} to {time.unix_to_iso(time_to)}")
             while time_to > time_from:
                 query_response = api_instance.get_api_test_latest_results(public_id=test_id, from_ts=time_from, to_ts=time_to).to_dict()
-                results = query_response["results"]
-    
-                print(f"\tFetched {len(results)} results from {time.unix_to_iso(results[-1]['check_time'])} to {time.unix_to_iso(results[0]['check_time'])}")
                 time_to = query_response["last_timestamp_fetched"]
                 synthetic_test_results += query_response["results"]
     
-            print(f"Fetched {len(synthetic_test_results)} results from {time.unix_to_iso(synthetic_test_results[0]['check_time'])} to {time.unix_to_iso(synthetic_test_results[-1]['check_time'])}")
+            logger.info(f"Fetched {len(synthetic_test_results)} results from {time.unix_to_iso(synthetic_test_results[0]['check_time'])} to {time.unix_to_iso(synthetic_test_results[-1]['check_time'])}")
             return synthetic_test_results
         
     def query_synthetic_uptime(dd_config: Configuration, test_id: str, time_from: str, time_to: str) -> dict:
@@ -647,11 +648,16 @@ data:
                 )
             )
     
+    
+            aggregate = 0
             if response.data.buckets and len(response.data.buckets) > 0:
-                return int(response.data.buckets[0].computes.get('c0', 0))
-            return 0
+                aggregate = int(response.data.buckets[0].computes.get('c0', 0))
+            logger.info(f"Aggregate log count query returned {aggregate} matching entries.")
+    
+            return aggregate
 
   env_data.py: |-
+    import logging
     import sys
     import json
     
@@ -659,6 +665,8 @@ data:
     import time_utils
     
     from datadog_api_client import Configuration
+    
+    logger = logging.getLogger(__name__)
     
     class Result:
         name: str
@@ -712,6 +720,7 @@ data:
         synthetic_results: dict[str, Result]
         alert_level = int
         manual_review = bool
+        no_errors = bool
     
         def __init__(
             self,
@@ -728,6 +737,7 @@ data:
             self.synthetic_results = {}
             self.alert_level = 0
             self.manual_review = False
+            self.no_errors = True
     
             try:
                 self.dd_config = q.get_dd_config(
@@ -740,6 +750,9 @@ data:
                 sys.exit(1)
     
         def add_result(self, result: Result):
+            if result.aggregate > 0:
+                self.no_errors = False
+    
             if result.alert_level > self.alert_level:
                 self.alert_level = result.alert_level
     
@@ -770,35 +783,6 @@ data:
             }
             return manual_results
     
-        def __repr__(self) -> str:
-            lines = [f"EnvData(env={self.env!r})"]
-    
-            if self._errs:
-                lines.append(" Errors:")
-                for key in sorted(self._errs):
-                    result = self._errs[key]
-                    lines.append(f"  {key}: {result!r}")
-    
-            if self.event_results:
-                lines.append(" Event Results:")
-                for key in sorted(self.event_results):
-                    event = self.event_results[key]
-                    lines.append(f"{key}: {event.aggregate}")
-    
-            if self.synthetic_results:
-                lines.append(" SyntheticResults:")
-                for key in sorted(self.synthetic_results):
-                    synth = self.synthetic_results[key]
-                    lines.append(
-                        f"  {key}: SyntheticResult("
-                        f"name={synth.name!r}, "
-                        f"synth_id={synth.query!r}, "
-                        f"failure={synth.failure_count}"
-                        f")"
-                    )
-    
-            return "\n".join(lines)
-    
         def errors(self):
             return self._errs.keys()
     
@@ -814,6 +798,7 @@ data:
         def _envdata_factory(env_config: dict, queries: dict, start: str, end: str):
             env_data = EnvData(env_config, start, end)
     
+            logger.info(f"Sending queries for environment: {env_config['name']}")
             for query_name, query_config in queries.items():
                 query_config: dict
                 query_type = query_config.get("type")
@@ -823,7 +808,8 @@ data:
                 manual_threshold = query_config.get("manual_threshold", 1)
     
                 fetch_query = EnvDataFactory.query_map.get(query_type)
-    
+                
+                logger.info(f"Running query '{query_name}' of type '{query_type}'")
                 raw_result = fetch_query(env_data.dd_config, query, env_data.timerange)
                 
                 aggregate = raw_result
@@ -895,8 +881,7 @@ data:
                     alert_envs["green"].append(env)
     
             # Get manual review results
-            manual_review_envs = [env for env in self.data if getattr(env, "manual_review", False)]
-            self.build_summary(alert_envs, manual_review_envs)
+            self.build_summary()
             self.build_env_breakdowns(alert_envs)
         
         def build_header(self):
@@ -940,8 +925,10 @@ data:
             return f"🟡 *{env.env}* — " + ", ".join(alert_results)     
     
     
-        def build_summary(self, alert_envs: dict[str, list[EnvData]], manual_review_envs: list[EnvData]):
+        def build_summary(self):
             summary_blocks = []
+            manual_review_envs = [env for env in self.data if getattr(env, "manual_review", False)]
+            no_error_envs = [env for env in self.data if env.no_errors]
     
             if manual_review_envs:
                 manual_review_lines = [f"🔎 *{env.env}* — {', '.join(f'{result.name} ({result.aggregate})' for result in env.get_manual_review_results().values())}" for env in manual_review_envs]
@@ -955,13 +942,13 @@ data:
                     }
                 )
     
-            if alert_envs["green"]:
+            if no_error_envs:
                 summary_blocks.append(
                     {
                         "type": "section",
                         "text": {
                             "type": "mrkdwn",
-                            "text": f"*No Errors:*\n🟢 *{', '.join(env.env for env in alert_envs['green'])}*"
+                            "text": f"*No Errors:*\n🟢 *{', '.join(env.env for env in no_error_envs)}*"
                         },
                     }
                 )
@@ -1019,19 +1006,20 @@ data:
             }
     
         def build_env_breakdowns(self, alert_envs: dict[str, list[EnvData]]) -> list[dict]:
-            for env in [*alert_envs["yellow"], *alert_envs["red"]]:
+            error_envs = [env for env in self.data if not env.no_errors]
+    
+            for env in error_envs:
                 env_block = {
                     "type": "section",
                     "text": {
                         "type": "mrkdwn",
-                        "text": f"*{env.env}*"
+                        "text": f"*{env.env}*",
                     },
                     "fields": self.build_env_fields(env)
                 }
     
                 self.message_blocks.append(env_block)
                 fm_context = self.build_filemover_context(env)
-                print(fm_context)
                 if fm_context:
                     self.message_blocks.append(fm_context)
                 self.message_blocks.append({"type": "divider"})
@@ -1052,8 +1040,7 @@ data:
     
     logger = logging.getLogger(__name__)
     
-    JINJA_TEMPLATE = Template(
-        """
+    JINJA_TEMPLATE = """
         {%- for env in data %}
         *[[ env.env ]]*
         {%- if env._errs is defined and env._errs %}
@@ -1079,7 +1066,6 @@ data:
         {%- endif %}
         {% endfor %}
         """
-    )
     
     QUERIES = [
       {
@@ -1302,7 +1288,7 @@ data:
         unique_jobs: dict[str, int] = {}
     
         for failed_job in log_results.raw:
-            print(failed_job['attributes']['attributes']['fm_job']['name'])
+            # print(failed_job['attributes']['attributes']['fm_job']['name'])
             job_name = failed_job['attributes']['attributes']['fm_job']['name']
             unique_jobs[job_name] = unique_jobs.get(job_name, 0) + 1
     
@@ -1322,7 +1308,6 @@ data:
         with open(output_path, 'w') as out_f:
             out_f.write(output)
         
-        print(f"Report generated at: {output_path}")
         return str(output_path)
     
     def upload_report_to_s3(config: AppConfig, report_path: str) -> None:
@@ -1332,32 +1317,40 @@ data:
         report_filename = os.path.basename(report_path)
         
         # Construct the S3 key
-        s3_key = f"{config.s3_key_prefix}{report_filename}"
+        s3_key = f"reports/{report_filename}"
         
         # Upload the file
         s3_client.upload_file(report_path, config.s3_bucket, s3_key)
         
-        print(f"Report uploaded to S3: s3://{config.s3_bucket}/{s3_key}")
+        logger.info(f"Report uploaded to S3: s3://{config.s3_bucket}/{s3_key}")
     
     def run_job(config: AppConfig) -> None:
         all_env_data = EnvDataFactory.from_static(QUERIES, config.time_from, config.time_to)
     
+        logger.info("Identifying unique filemover failures...")
         for env in all_env_data:
-            if env.log_results.get('failed_fm_jobs'):
-                logging.info("Filemover failures detected for %s, identifying unique jobs...", env.env)
+            if env.log_results.get('failed_fm_jobs') and len(env.log_results['failed_fm_jobs'].raw) > 0:
                 env.filtered_fm_jobs = identify_unique_filemover_jobs(env.log_results.get('failed_fm_jobs', {}))
-        
+                logger.info("Unique filemover failures identified in %s: %d", env.env, env.filtered_fm_jobs)
+            else:
+                logger.info("No filemover failures found in %s", env.env)
+    
+        logger.info("Building report...")
         report_path = build_report(config, all_env_data)
-        upload_report_to_s3(config, report_path)
+        logger.info(f"Report built successfully at {report_path}. Attempting to upload to S3...")
+        # upload_report_to_s3(config, report_path)
+    
+        logger.info("Sending Slack message...")
         messenger = SlackMessenger(all_env_data)
         messenger.build_message()
-        
         secret_name = os.getenv("SECRET_NAME")
         region_name = os.getenv("AWS_REGION")
         secrets = get_aws_secrets_helper([secret_name], region_name)
         slack_api_key = secrets["daily-monitoring-us-east-2"].get("SLACK_API_KEY")
     
         send_slack_message(messenger.message_blocks, config.output_channel_id, slack_api_key)
+        logger.info("Slack message sent successfully.")
+        logger.info("Job execution completed, shutting down...")
 
   main.py: |-
     #!/usr/bin/env python

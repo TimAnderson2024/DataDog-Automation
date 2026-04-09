@@ -261,7 +261,7 @@ def identify_unique_filemover_jobs(log_results: dict[str, Result]) -> set[str]:
     unique_jobs: dict[str, int] = {}
 
     for failed_job in log_results.raw:
-        print(failed_job['attributes']['attributes']['fm_job']['name'])
+        # print(failed_job['attributes']['attributes']['fm_job']['name'])
         job_name = failed_job['attributes']['attributes']['fm_job']['name']
         unique_jobs[job_name] = unique_jobs.get(job_name, 0) + 1
 
@@ -281,7 +281,6 @@ def build_report(config: AppConfig, all_env_data: list[EnvData]) -> str:
     with open(output_path, 'w') as out_f:
         out_f.write(output)
     
-    print(f"Report generated at: {output_path}")
     return str(output_path)
 
 def upload_report_to_s3(config: AppConfig, report_path: str) -> None:
@@ -291,29 +290,37 @@ def upload_report_to_s3(config: AppConfig, report_path: str) -> None:
     report_filename = os.path.basename(report_path)
     
     # Construct the S3 key
-    s3_key = f"{config.s3_key_prefix}{report_filename}"
+    s3_key = f"reports/{report_filename}"
     
     # Upload the file
     s3_client.upload_file(report_path, config.s3_bucket, s3_key)
     
-    print(f"Report uploaded to S3: s3://{config.s3_bucket}/{s3_key}")
+    logger.info(f"Report uploaded to S3: s3://{config.s3_bucket}/{s3_key}")
 
 def run_job(config: AppConfig) -> None:
     all_env_data = EnvDataFactory.from_static(QUERIES, config.time_from, config.time_to)
 
+    logger.info("Identifying unique filemover failures...")
     for env in all_env_data:
-        if env.log_results.get('failed_fm_jobs'):
-            logging.info("Filemover failures detected for %s, identifying unique jobs...", env.env)
+        if env.log_results.get('failed_fm_jobs') and len(env.log_results['failed_fm_jobs'].raw) > 0:
             env.filtered_fm_jobs = identify_unique_filemover_jobs(env.log_results.get('failed_fm_jobs', {}))
-    
+            logger.info("Unique filemover failures identified in %s: %d", env.env, env.filtered_fm_jobs)
+        else:
+            logger.info("No filemover failures found in %s", env.env)
+
+    logger.info("Building report...")
     report_path = build_report(config, all_env_data)
-    upload_report_to_s3(config, report_path)
+    logger.info(f"Report built successfully at {report_path}. Attempting to upload to S3...")
+    # upload_report_to_s3(config, report_path)
+
+    logger.info("Sending Slack message...")
     messenger = SlackMessenger(all_env_data)
     messenger.build_message()
-    
     secret_name = os.getenv("SECRET_NAME")
     region_name = os.getenv("AWS_REGION")
     secrets = get_aws_secrets_helper([secret_name], region_name)
     slack_api_key = secrets["daily-monitoring-us-east-2"].get("SLACK_API_KEY")
 
     send_slack_message(messenger.message_blocks, config.output_channel_id, slack_api_key)
+    logger.info("Slack message sent successfully.")
+    logger.info("Job execution completed, shutting down...")

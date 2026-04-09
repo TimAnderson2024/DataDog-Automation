@@ -1,4 +1,5 @@
 import os
+import logging
 from datadog_api_client import ApiClient, Configuration
 
 from datadog_api_client.v1 import Configuration as V1Configuration
@@ -21,6 +22,8 @@ from datadog_api_client.v2.model.events_request_page import EventsRequestPage
 
 from external_helpers import get_aws_secrets_helper
 import time_utils as time
+
+logger = logging.getLogger(__name__)
 
 DATADOG_URL = "datadoghq.com"
 
@@ -67,18 +70,18 @@ def query_logs(dd_config: Configuration, query_string: str, time_range: tuple[in
         logs_processed = 0
         while True:
             response = api_instance.list_logs(body=query_body)
-            print(response)
             response_data = response.data
             response_metadata = response.meta.to_dict()
 
             all_logs.extend(response_data)
             logs_processed += len(response_data)
-            print(f"Processed {logs_processed} log entries...")
+            logger.info(f"Processed {logs_processed} log entries...")
                     
             if not response_metadata.get('page', None):
                 break
             query_body.page.cursor = response_metadata['page']['after']
 
+    logger.info(f"Finished processing logs. Total matching entries retrieved: {len(all_logs)}")
     return all_logs
 
 def query_metric(dd_config: V1Configuration, query_string: str, time_range: tuple[int, int]) -> list[dict]:
@@ -121,6 +124,7 @@ def query_events(dd_config: Configuration, query_string: str, time_range: tuple[
                 break
             query_body.page.cursor = response_metadata['page']['after']
 
+        logger.info(f"Finished processing events. Total matching entries retrieved: {len(all_logs)}")
         return all_logs 
 
 def query_synthetic_test(dd_config: Configuration, test_id: str, time_range) -> dict:
@@ -131,16 +135,13 @@ def query_synthetic_test(dd_config: Configuration, test_id: str, time_range) -> 
 
         # Paginate results using last_timestamp_fetched (API output cuts off at 150 results)
         synthetic_test_results = []
-        print(f"Fetching synthetic results from {time.unix_to_iso(time_from)} to {time.unix_to_iso(time_to)}:")
+        logger.info(f"Fetching synthetic results from {time.unix_to_iso(time_from)} to {time.unix_to_iso(time_to)}")
         while time_to > time_from:
             query_response = api_instance.get_api_test_latest_results(public_id=test_id, from_ts=time_from, to_ts=time_to).to_dict()
-            results = query_response["results"]
-
-            print(f"\tFetched {len(results)} results from {time.unix_to_iso(results[-1]['check_time'])} to {time.unix_to_iso(results[0]['check_time'])}")
             time_to = query_response["last_timestamp_fetched"]
             synthetic_test_results += query_response["results"]
 
-        print(f"Fetched {len(synthetic_test_results)} results from {time.unix_to_iso(synthetic_test_results[0]['check_time'])} to {time.unix_to_iso(synthetic_test_results[-1]['check_time'])}")
+        logger.info(f"Fetched {len(synthetic_test_results)} results from {time.unix_to_iso(synthetic_test_results[0]['check_time'])} to {time.unix_to_iso(synthetic_test_results[-1]['check_time'])}")
         return synthetic_test_results
     
 def query_synthetic_uptime(dd_config: Configuration, test_id: str, time_from: str, time_to: str) -> dict:
@@ -175,6 +176,10 @@ def query_log_count_aggregate(dd_config: Configuration, query_string: str, time_
             )
         )
 
+
+        aggregate = 0
         if response.data.buckets and len(response.data.buckets) > 0:
-            return int(response.data.buckets[0].computes.get('c0', 0))
-        return 0
+            aggregate = int(response.data.buckets[0].computes.get('c0', 0))
+        logger.info(f"Aggregate log count query returned {aggregate} matching entries.")
+
+        return aggregate

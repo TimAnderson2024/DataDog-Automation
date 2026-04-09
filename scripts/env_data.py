@@ -1,3 +1,4 @@
+import logging
 import sys
 import json
 
@@ -5,6 +6,8 @@ import query as q
 import time_utils
 
 from datadog_api_client import Configuration
+
+logger = logging.getLogger(__name__)
 
 class Result:
     name: str
@@ -58,6 +61,7 @@ class EnvData:
     synthetic_results: dict[str, Result]
     alert_level = int
     manual_review = bool
+    no_errors = bool
 
     def __init__(
         self,
@@ -74,6 +78,7 @@ class EnvData:
         self.synthetic_results = {}
         self.alert_level = 0
         self.manual_review = False
+        self.no_errors = True
 
         try:
             self.dd_config = q.get_dd_config(
@@ -86,6 +91,9 @@ class EnvData:
             sys.exit(1)
 
     def add_result(self, result: Result):
+        if result.aggregate > 0:
+            self.no_errors = False
+
         if result.alert_level > self.alert_level:
             self.alert_level = result.alert_level
 
@@ -116,35 +124,6 @@ class EnvData:
         }
         return manual_results
 
-    def __repr__(self) -> str:
-        lines = [f"EnvData(env={self.env!r})"]
-
-        if self._errs:
-            lines.append(" Errors:")
-            for key in sorted(self._errs):
-                result = self._errs[key]
-                lines.append(f"  {key}: {result!r}")
-
-        if self.event_results:
-            lines.append(" Event Results:")
-            for key in sorted(self.event_results):
-                event = self.event_results[key]
-                lines.append(f"{key}: {event.aggregate}")
-
-        if self.synthetic_results:
-            lines.append(" SyntheticResults:")
-            for key in sorted(self.synthetic_results):
-                synth = self.synthetic_results[key]
-                lines.append(
-                    f"  {key}: SyntheticResult("
-                    f"name={synth.name!r}, "
-                    f"synth_id={synth.query!r}, "
-                    f"failure={synth.failure_count}"
-                    f")"
-                )
-
-        return "\n".join(lines)
-
     def errors(self):
         return self._errs.keys()
 
@@ -160,6 +139,7 @@ class EnvDataFactory:
     def _envdata_factory(env_config: dict, queries: dict, start: str, end: str):
         env_data = EnvData(env_config, start, end)
 
+        logger.info(f"Sending queries for environment: {env_config['name']}")
         for query_name, query_config in queries.items():
             query_config: dict
             query_type = query_config.get("type")
@@ -169,7 +149,8 @@ class EnvDataFactory:
             manual_threshold = query_config.get("manual_threshold", 1)
 
             fetch_query = EnvDataFactory.query_map.get(query_type)
-
+            
+            logger.info(f"Running query '{query_name}' of type '{query_type}'")
             raw_result = fetch_query(env_data.dd_config, query, env_data.timerange)
             
             aggregate = raw_result
