@@ -71,7 +71,7 @@ QUERIES = [
       },
       "failed_fm_jobs": {
         "type": "log",
-        "query": "kube_namespace:*ktrs run_job.sh result for job failed env:ulp-prod",
+        "query": "kube_namespace:(stgwe* OR *ktrs) run_job.sh result for \"job failed\" env:ulp-prod",
         "manual_threshold": 2, 
         "yellow_threshold": 1,
         "red_threshold": 2
@@ -115,7 +115,7 @@ QUERIES = [
       },
       "failed_fm_jobs": {
         "type": "log",
-        "query": "kube_namespace:*ktrs run_job.sh result for job failed env:cls-prod",
+        "query": "kube_namespace:(stgwe* OR *ktrs) run_job.sh result for \"job failed\" env:cls-prod",
         "manual_threshold": 2,
         "yellow_threshold": 1,
         "red_threshold": 2
@@ -154,7 +154,7 @@ QUERIES = [
       },
       "failed_fm_jobs": {
         "type": "log",
-        "query": "kube_namespace:*ktrs run_job.sh result for job failed env:los-prod",
+        "query": "kube_namespace:(stgwe* OR *ktrs) run_job.sh result for \"job failed\" env:los-prod",
         "manual_threshold": 1, 
         "yellow_threshold": 1,
         "red_threshold": 2
@@ -261,8 +261,10 @@ def identify_unique_filemover_jobs(log_results: dict[str, Result]) -> set[str]:
     unique_jobs: dict[str, int] = {}
 
     for failed_job in log_results.raw:
-        # print(failed_job['attributes']['attributes']['fm_job']['name'])
-        job_name = failed_job['attributes']['attributes']['fm_job']['name']
+        if failed_job['attributes'].get('service'):
+          job_name = failed_job['attributes']['service']
+        else:
+          job_name = failed_job['attributes']['attributes']['fm_job']['name']
         unique_jobs[job_name] = unique_jobs.get(job_name, 0) + 1
 
     return unique_jobs
@@ -304,7 +306,12 @@ def run_job(config: AppConfig) -> None:
     for env in all_env_data:
         if env.log_results.get('failed_fm_jobs') and len(env.log_results['failed_fm_jobs'].raw) > 0:
             env.filtered_fm_jobs = identify_unique_filemover_jobs(env.log_results.get('failed_fm_jobs', {}))
-            logger.info("Unique filemover failures identified in %s: %d", env.env, env.filtered_fm_jobs)
+            logger.info(
+              "Unique filemover failures identified in %s: count=%d details=%s",
+              env.env,
+              len(env.filtered_fm_jobs),
+              env.filtered_fm_jobs
+            )
         else:
             logger.info("No filemover failures found in %s", env.env)
 
