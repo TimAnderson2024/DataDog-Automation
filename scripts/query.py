@@ -80,7 +80,6 @@ def query_logs(dd_config: Configuration, query_string: str, time_range: tuple[in
             if not response_metadata.get('page', None):
                 break
             query_body.page.cursor = response_metadata['page']['after']
-    print(all_logs)
     logger.info(f"Finished processing logs. Total matching entries retrieved: {len(all_logs)}")
     return all_logs
 
