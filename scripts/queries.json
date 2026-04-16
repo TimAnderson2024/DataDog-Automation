@@ -212,5 +212,17 @@
         "red_threshold": 1
       }
     }
+  },
+  {
+    "name": "Other Synthetic Tests",
+    "API_KEY": "DD_ULP_API_KEY",
+    "APP_KEY": "DD_ULP_APP_KEY",
+    "queries": {
+      "core.allocore.com": {
+        "type": "synthetic",
+        "query": "bsi-2qz-vvt",
+        "red_threshold": 1
+      }
+    }
   }
 ]

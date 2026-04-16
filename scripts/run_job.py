@@ -75,11 +75,6 @@ QUERIES = [
         "manual_threshold": 2, 
         "yellow_threshold": 1,
         "red_threshold": 2
-      },
-      "core.allocore.com": {
-        "type": "synthetic",
-        "query": "bsi-2qz-vvt",
-        "red_threshold": 1
       }
     }
   },
@@ -251,6 +246,18 @@ QUERIES = [
       "oom": {
         "type": "event",
         "query": "env:ace-prod status:error (OutOfMemoryError OR \"out of memory\" OR OOM)",
+        "red_threshold": 1
+      }
+    }
+  },
+  {
+    "name": "Other Synthetic Tests",
+    "API_KEY": "DD_ULP_API_KEY",
+    "APP_KEY": "DD_ULP_APP_KEY",
+    "queries": {
+      "core.allocore.com": {
+        "type": "synthetic",
+        "query": "bsi-2qz-vvt",
         "red_threshold": 1
       }
     }

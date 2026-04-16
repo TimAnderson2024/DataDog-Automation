@@ -186,6 +186,7 @@ class EnvDataFactory:
         env_data_series: list = []
         if type(json_queries) is list:
             for env in json_queries:
+                logger.info(env.get("name"))
                 env_data_series.append(EnvDataFactory._envdata_factory(env, env["queries"], start, end))
         else:
             env_data_series.append(
