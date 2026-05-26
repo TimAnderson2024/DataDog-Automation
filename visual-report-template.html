@@ -76,8 +76,8 @@
     border-radius: var(--radius);
     border: 1px solid;
   }
-  .attention-badge.critical { background: var(--red-light); color: var(--red); border-color: #f0a099; }
-  .attention-badge.warn { background: var(--amber-light); color: var(--amber); border-color: #f5c97a; }
+  .attention-badge.warning { background: var(--red-light); color: var(--red); border-color: #f0a099; }
+  .attention-badge.moderate { background: var(--amber-light); color: var(--amber); border-color: #f5c97a; }
   .attention-badge.ok { background: var(--green-light); color: var(--green); border-color: #93c99a; }
 
   /* Top issues bar */
@@ -114,8 +114,8 @@
     border: 1px solid;
     flex-shrink: 0;
   }
-  .issue-chip.crit { background: var(--red-light); color: var(--red); border-color: #f0a099; }
-  .issue-chip.warn { background: var(--amber-light); color: var(--amber); border-color: #f5c97a; }
+  .issue-chip.warning { background: var(--red-light); color: var(--red); border-color: #f0a099; }
+  .issue-chip.moderate { background: var(--amber-light); color: var(--amber); border-color: #f5c97a; }
   .issue-count { font-weight: 600; font-size: 16px; }
   .issue-env { opacity: 0.85; }
   .issue-metric { font-weight: 500; }
@@ -149,8 +149,8 @@
     border-radius: var(--radius-lg);
     padding: 12px 14px;
   }
-  .env-card.has-critical { border-color: #f0a099; border-left: 3px solid var(--red); }
-  .env-card.has-warning  { border-color: #f5c97a; border-left: 3px solid var(--amber); }
+  .env-card.has-warning  { border-color: #f0a099; border-left: 3px solid var(--red); }
+  .env-card.has-moderate { border-color: #f5c97a; border-left: 3px solid var(--amber); }
   .env-card.all-clear    { border-color: #93c99a; border-left: 3px solid #4caf50; }
   .env-header { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
   .env-name { font-family: var(--font-mono); font-size: 13px; font-weight: 500; flex: 1; }
@@ -172,8 +172,9 @@
     padding: 2px 0;
   }
   .metric-name { color: var(--text-secondary); font-family: var(--font-mono); font-size: 11px; }
-  .metric-val { font-family: var(--font-mono); font-size: 12px; font-weight: 500; }
+  .metric-val { font-family: var(--font-mono); font-size: 12px; font-weight: 500; min-width: 36px; text-align: right; }
   .metric-val.zero { color: var(--text-muted); font-weight: 400; }
+  .metric-val.ok-green { color: var(--green); }
   .metric-val.nonzero-red { color: var(--red); }
   .metric-val.nonzero-amber { color: var(--amber); }
   .metric-right { display: flex; align-items: center; gap: 8px; }
@@ -186,9 +187,12 @@
     padding: 2px 6px;
     border-radius: 3px;
     border: 1px solid;
+    min-width: 64px;
+    text-align: center;
+    box-sizing: border-box;
   }
-  .row-tag.crit { background: var(--red-light); color: var(--red); border-color: #f0a099; }
-  .row-tag.warn { background: var(--amber-light); color: var(--amber); border-color: #f5c97a; }
+  .row-tag.warning { background: var(--red-light); color: var(--red); border-color: #f0a099; }
+  .row-tag.moderate { background: var(--amber-light); color: var(--amber); border-color: #f5c97a; }
   .env-divider { border: none; border-top: 0.5px solid var(--border); margin: 7px 0; }
   .metric-sub { font-size: 10px; color: var(--text-muted); font-family: var(--font-mono); margin-top: 4px; }
 
@@ -202,6 +206,16 @@
   }
   .fm-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
   .fm-subtitle { font-size: 12px; color: var(--text-secondary); }
+  .fm-env-block { padding: 8px 0; border-top: 0.5px solid var(--border); }
+  .fm-env-block:first-of-type { border-top: none; padding-top: 0; }
+  .fm-env-header {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    margin-bottom: 6px;
+  }
+  .fm-env-name { font-family: var(--font-mono); font-size: 12px; font-weight: 500; color: var(--text-primary); }
+  .fm-env-meta { font-family: var(--font-mono); font-size: 11px; color: var(--text-muted); }
   .fm-jobs { display: flex; flex-wrap: wrap; gap: 6px; }
   .fm-job {
     font-family: var(--font-mono);
@@ -420,18 +434,27 @@
     function severity(env) {
       let worst = 'ok';
       const consider = (lvl) => {
-        if (lvl === 'crit') worst = 'crit';
-        else if (lvl === 'warn' && worst !== 'crit') worst = 'warn';
+        if (lvl === 'warning') worst = 'warning';
+        else if (lvl === 'moderate' && worst !== 'warning') worst = 'moderate';
       };
       for (const def of METRIC_DEFS) consider(levelOf(env, def.key));
       consider(levelOf(env, 'filemover'));
       consider(levelOf(env, 'synthetic'));
-      return worst === 'crit' ? 'critical' : worst === 'warn' ? 'warning' : 'ok';
+      return worst;
     }
 
-    const critical = envs.filter(e => severity(e) === 'critical');
-    const warnings = envs.filter(e => severity(e) === 'warning');
-    const clear    = envs.filter(e => severity(e) === 'ok');
+    function hasAnyError(env) {
+      for (const def of METRIC_DEFS) {
+        if ((env[def.key] || 0) > 0) return true;
+      }
+      if (fmTotal(env) > 0) return true;
+      if (env.synthetic && env.synthetic.errors > 0) return true;
+      return false;
+    }
+
+    const warningEnvs = envs.filter(e => severity(e) === 'warning');
+    const moderateEnvs = envs.filter(e => severity(e) === 'moderate');
+    const clear = envs.filter(e => !hasAnyError(e));
 
     const allFmJobs = envs.flatMap(e => (e.filemover_failures||[]).map(j => ({...j, env: e.name})));
     const totalFm = allFmJobs.reduce((s,j) => s + j.count, 0);
@@ -439,8 +462,8 @@
     const dateObj = new Date(d.date + 'T12:00:00');
     const dateStr = dateObj.toLocaleDateString('en-US', { weekday:'long', year:'numeric', month:'long', day:'numeric' });
 
-    const needAttention = critical.length + warnings.length;
-    let badgeClass = needAttention === 0 ? 'ok' : critical.length > 0 ? 'critical' : 'warn';
+    const needAttention = warningEnvs.length + moderateEnvs.length;
+    let badgeClass = needAttention === 0 ? 'ok' : warningEnvs.length > 0 ? 'warning' : 'moderate';
     let badgeText = needAttention === 0
       ? 'All clear'
       : needAttention === 1 ? '1 env needs attention'
@@ -464,14 +487,14 @@
         }
       }
       issues.sort((a, b) => {
-        if (a.level !== b.level) return a.level === 'crit' ? -1 : 1;
+        if (a.level !== b.level) return a.level === 'warning' ? -1 : 1;
         return b.count - a.count;
       });
       return issues;
     }
 
     function issuesBar() {
-      const issues = collectIssues();
+      const issues = collectIssues().filter(i => i.level === 'warning');
       if (issues.length === 0) {
         return `<div class="issues-bar"><span class="issues-label">Top issues</span><span class="issues-empty">All clear ✓</span></div>`;
       }
@@ -494,13 +517,16 @@
     }
 
     function tagFor(level) {
-      if (level === 'crit') return `<span class="row-tag crit">critical</span>`;
-      if (level === 'warn') return `<span class="row-tag warn">warning</span>`;
+      if (level === 'warning') return `<span class="row-tag warning">warning</span>`;
+      if (level === 'moderate') return `<span class="row-tag moderate">moderate</span>`;
       return '';
     }
 
     function metricRow(name, n, level, valueOverride, showTag = true) {
-      const valClass = level === 'crit' ? 'nonzero-red' : level === 'warn' ? 'nonzero-amber' : 'zero';
+      let valClass;
+      if (level === 'warning') valClass = 'nonzero-red';
+      else if (level === 'moderate') valClass = 'nonzero-amber';
+      else valClass = valueOverride !== undefined ? 'zero' : 'ok-green';
       const display = valueOverride !== undefined ? valueOverride : n;
       const tag = showTag ? tagFor(level) : '';
       return `<div class="metric-row">
@@ -511,7 +537,7 @@
 
     function envCard(env) {
       const sev = severity(env);
-      const cardClass = sev === 'critical' ? 'has-critical' : sev === 'warning' ? 'has-warning' : 'all-clear';
+      const cardClass = sev === 'warning' ? 'has-warning' : sev === 'moderate' ? 'has-moderate' : 'all-clear';
       const rows = METRIC_DEFS.map(def => {
         const n = env[def.key] || 0;
         return metricRow(def.label, n, levelOf(env, def.key));
@@ -554,16 +580,30 @@
     }
 
     function fmSection() {
-      if (allFmJobs.length === 0) return `<div class="filemover-section"><p class="section-label">Filemover failures</p><span class="fm-empty">no failures today</span></div>`;
-      const chips = allFmJobs.map(j => `<span class="fm-job">${j.job} <span class="fm-count">${j.count}</span></span>`).join('');
-      const envNames = [...new Set(allFmJobs.map(j=>j.env))].join(', ');
+      const envsWithFm = envs.filter(e => (e.filemover_failures||[]).length > 0);
+      if (envsWithFm.length === 0) {
+        return `<div class="filemover-section"><p class="section-label">Filemover failures</p><span class="fm-empty">no failures today</span></div>`;
+      }
+      const blocks = envsWithFm.map(env => {
+        const jobs = env.filemover_failures;
+        const envTotal = jobs.reduce((s,j) => s + j.count, 0);
+        const chips = jobs.map(j => `<span class="fm-job">${j.job} <span class="fm-count">${j.count}</span></span>`).join('');
+        return `
+        <div class="fm-env-block">
+          <div class="fm-env-header">
+            <span class="fm-env-name">${env.name}</span>
+            <span class="fm-env-meta">${envTotal} failed · ${jobs.length} job${jobs.length === 1 ? '' : 's'}</span>
+          </div>
+          <div class="fm-jobs">${chips}</div>
+        </div>`;
+      }).join('');
       return `
       <div class="filemover-section">
         <div class="fm-header">
           <p class="section-label">Filemover failures</p>
-          <span class="fm-subtitle">${totalFm} failed jobs · ${envNames}</span>
+          <span class="fm-subtitle">${totalFm} failed across ${envsWithFm.length} env${envsWithFm.length === 1 ? '' : 's'}</span>
         </div>
-        <div class="fm-jobs">${chips}</div>
+        ${blocks}
       </div>`;
     }
 
@@ -645,10 +685,10 @@
 
     ${issuesBar()}
 
-    ${(critical.length + warnings.length) > 0 ? `
+    ${envs.some(hasAnyError) ? `
     <p class="section-label">Environment breakdown</p>
     <div class="env-grid">
-      ${critical.concat(warnings).map(envCard).join('')}
+      ${envs.filter(hasAnyError).map(envCard).join('')}
     </div>` : ''}
 
     ${clearSection()}

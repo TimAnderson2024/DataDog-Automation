@@ -386,9 +386,9 @@ def run_job(config: AppConfig) -> None:
         return result.aggregate if result else 0
 
     def _level(result: Result | None) -> str:
-        if not result or result.aggregate == 0:
+        if not result or result.aggregate < result.yellow_threshold:
             return "ok"
-        return "crit" if result.aggregate >= result.red_threshold else "warn"
+        return "warning" if result.aggregate >= result.red_threshold else "moderate"
 
     def _first_synthetic(env: EnvData):
         if not env.synthetic_results:
