@@ -1,16 +1,14 @@
 import logging
 import os
-from unittest import result
 import boto3
 
 from jinja2 import Environment
 
 from datetime import date, datetime
-from string import Template
 from env_data import EnvData, EnvData, EnvDataFactory, Result
 from app_config import AppConfig
 from slack_messenger import SlackMessenger
-from external_helpers import get_aws_secrets_helper, send_slack_message
+from external_helpers import get_aws_secrets_helper
 
 logger = logging.getLogger(__name__)
 
