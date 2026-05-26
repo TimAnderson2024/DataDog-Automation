@@ -1,0 +1,898 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Production Health Report</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #f5f4f0;
+    --surface: #ffffff;
+    --surface-2: #f0efe9;
+    --border: #dddbd3;
+    --border-strong: #c8c6bc;
+    --text-primary: #1a1916;
+    --text-secondary: #6b6961;
+    --text-muted: #9e9b92;
+    --red: #c8392b;
+    --red-light: #fcecea;
+    --red-mid: #f0a099;
+    --amber: #b45309;
+    --amber-light: #fdf3e0;
+    --green: #2e7d32;
+    --green-light: #eaf3e0;
+    --font-sans: 'IBM Plex Sans', sans-serif;
+    --font-mono: 'IBM Plex Mono', monospace;
+    --radius: 6px;
+    --radius-lg: 10px;
+  }
+
+  body {
+    font-family: var(--font-sans);
+    background: var(--bg);
+    color: var(--text-primary);
+    padding: 2rem;
+    min-height: 100vh;
+  }
+
+  @media print {
+    body { background: white; padding: 1rem; }
+    .surface { box-shadow: none; }
+  }
+
+  .page { max-width: 900px; margin: 0 auto; }
+
+  /* Header */
+  .header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 1.5rem;
+    padding-bottom: 1rem;
+    border-bottom: 1.5px solid var(--border-strong);
+  }
+  .header-left { display: flex; flex-direction: column; gap: 4px; }
+  .report-title {
+    font-family: var(--font-mono);
+    font-size: 18px;
+    font-weight: 500;
+    letter-spacing: -0.02em;
+    color: var(--text-primary);
+  }
+  .report-meta {
+    font-size: 12px;
+    color: var(--text-secondary);
+    font-family: var(--font-mono);
+  }
+  .attention-badge {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 500;
+    padding: 5px 10px;
+    border-radius: var(--radius);
+    border: 1px solid;
+  }
+  .attention-badge.critical { background: var(--red-light); color: var(--red); border-color: #f0a099; }
+  .attention-badge.warn { background: var(--amber-light); color: var(--amber); border-color: #f5c97a; }
+  .attention-badge.ok { background: var(--green-light); color: var(--green); border-color: #93c99a; }
+
+  /* Top issues bar */
+  .issues-bar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: var(--surface);
+    border: 0.5px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 16px 20px;
+    margin-bottom: 1.5rem;
+    overflow: hidden;
+    white-space: nowrap;
+    flex-wrap: nowrap;
+  }
+  .issues-label {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-right: 10px;
+    flex-shrink: 0;
+  }
+  .issue-chip {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 8px;
+    font-family: var(--font-mono);
+    font-size: 14px;
+    padding: 8px 14px;
+    border-radius: var(--radius);
+    border: 1px solid;
+    flex-shrink: 0;
+  }
+  .issue-chip.crit { background: var(--red-light); color: var(--red); border-color: #f0a099; }
+  .issue-chip.warn { background: var(--amber-light); color: var(--amber); border-color: #f5c97a; }
+  .issue-count { font-weight: 600; font-size: 16px; }
+  .issue-env { opacity: 0.85; }
+  .issue-metric { font-weight: 500; }
+  .issues-empty {
+    font-family: var(--font-mono);
+    font-size: 15px;
+    color: var(--green);
+  }
+
+  /* Section label */
+  .section-label {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 500;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-bottom: 8px;
+  }
+
+  /* Env grid */
+  .env-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+    margin-bottom: 1.5rem;
+  }
+  .env-card {
+    background: var(--surface);
+    border: 0.5px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 12px 14px;
+  }
+  .env-card.has-critical { border-color: #f0a099; border-left: 3px solid var(--red); }
+  .env-card.has-warning  { border-color: #f5c97a; border-left: 3px solid var(--amber); }
+  .env-card.all-clear    { border-color: #93c99a; border-left: 3px solid #4caf50; }
+  .env-header { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+  .env-name { font-family: var(--font-mono); font-size: 13px; font-weight: 500; flex: 1; }
+  .env-badge {
+    font-size: 10px;
+    font-family: var(--font-mono);
+    padding: 2px 7px;
+    border-radius: 4px;
+    border: 1px solid;
+  }
+  .badge-critical { background: var(--red-light); color: var(--red); border-color: #f0a099; }
+  .badge-warning  { background: var(--amber-light); color: var(--amber); border-color: #f5c97a; }
+  .badge-ok       { background: var(--green-light); color: var(--green); border-color: #93c99a; }
+  .metric-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 12px;
+    padding: 2px 0;
+  }
+  .metric-name { color: var(--text-secondary); font-family: var(--font-mono); font-size: 11px; }
+  .metric-val { font-family: var(--font-mono); font-size: 12px; font-weight: 500; }
+  .metric-val.zero { color: var(--text-muted); font-weight: 400; }
+  .metric-val.nonzero-red { color: var(--red); }
+  .metric-val.nonzero-amber { color: var(--amber); }
+  .metric-right { display: flex; align-items: center; gap: 8px; }
+  .row-tag {
+    font-family: var(--font-mono);
+    font-size: 9px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    padding: 2px 6px;
+    border-radius: 3px;
+    border: 1px solid;
+  }
+  .row-tag.crit { background: var(--red-light); color: var(--red); border-color: #f0a099; }
+  .row-tag.warn { background: var(--amber-light); color: var(--amber); border-color: #f5c97a; }
+  .env-divider { border: none; border-top: 0.5px solid var(--border); margin: 7px 0; }
+  .metric-sub { font-size: 10px; color: var(--text-muted); font-family: var(--font-mono); margin-top: 4px; }
+
+  /* Filemover */
+  .filemover-section {
+    background: var(--surface);
+    border: 0.5px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 12px 14px;
+    margin-bottom: 1.5rem;
+  }
+  .fm-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+  .fm-subtitle { font-size: 12px; color: var(--text-secondary); }
+  .fm-jobs { display: flex; flex-wrap: wrap; gap: 6px; }
+  .fm-job {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    background: var(--surface-2);
+    border: 0.5px solid var(--border);
+    border-radius: var(--radius);
+    padding: 3px 9px;
+    color: var(--text-secondary);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .fm-count { color: var(--red); font-weight: 500; }
+  .fm-empty { font-size: 12px; color: var(--text-muted); font-family: var(--font-mono); }
+
+  /* Clear (no errors) */
+  .clear-section {
+    background: var(--surface);
+    border: 0.5px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 12px 14px;
+    margin-bottom: 1.5rem;
+  }
+  .clear-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+  .clear-subtitle { font-size: 12px; color: var(--text-secondary); }
+  .clear-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .clear-chip {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    background: var(--green-light);
+    border: 0.5px solid #93c99a;
+    border-radius: var(--radius);
+    padding: 3px 9px;
+    color: var(--green);
+  }
+
+  /* Trend */
+  .trend-section {
+    background: var(--surface);
+    border: 0.5px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 14px 16px;
+  }
+  .trend-legend { display: flex; gap: 14px; flex-wrap: wrap; margin-bottom: 14px; }
+  .leg-item { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--text-secondary); font-family: var(--font-mono); }
+  .leg-swatch { width: 9px; height: 9px; border-radius: 2px; }
+  .date-header { display: grid; grid-template-columns: 80px 1fr 52px; gap: 10px; margin-bottom: 8px; }
+  .date-labels { display: flex; }
+  .date-lbl { flex: 1; font-size: 10px; color: var(--text-muted); text-align: center; font-family: var(--font-mono); }
+  .date-lbl.today { color: var(--text-primary); font-weight: 500; }
+  .trend-row { display: grid; grid-template-columns: 80px 1fr 52px; gap: 10px; align-items: center; margin-bottom: 8px; }
+  .trend-env { font-size: 12px; color: var(--text-secondary); font-family: var(--font-mono); }
+  .day-group { display: flex; gap: 3px; height: 44px; align-items: flex-end; }
+  .day-col { flex: 1; display: flex; flex-direction: column; justify-content: flex-end; height: 44px; }
+  .day-stack { border-radius: 3px; overflow: hidden; display: flex; flex-direction: column; width: 100%; }
+  .day-stack.today-col { outline: 1.5px solid #888; outline-offset: 1px; }
+  .day-flat { height: 2px; border-radius: 2px; background: var(--surface-2); width: 100%; }
+  .trend-total { font-family: var(--font-mono); font-size: 11px; font-weight: 500; text-align: right; }
+  .trend-total.danger { color: var(--red); }
+  .trend-total.ok { color: var(--green); }
+  .trend-total.neutral { color: var(--text-muted); }
+  .trend-note { font-size: 11px; color: var(--text-muted); font-family: var(--font-mono); margin-top: 12px; padding-top: 10px; border-top: 0.5px solid var(--border); }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <!-- ============================================================
+       DATA INJECTION POINT
+       Replace the object below with output from your Python script.
+       See bottom of file for the Python helper function.
+  ============================================================ -->
+  <script>
+  const REPORT_DATA = {
+  "date": "2026-05-26",
+  "time": "11:58",
+  "environments": [
+    {
+      "name": "ULP",
+      "e504": 8,
+      "e502": 0,
+      "e503": 0,
+      "oom": 8,
+      "levels": {
+        "e504": "warn",
+        "e502": "ok",
+        "e503": "ok",
+        "oom": "crit",
+        "filemover": "ok",
+        "synthetic": "ok"
+      },
+      "filemover_failures": [],
+      "synthetic": null
+    },
+    {
+      "name": "CLS",
+      "e504": 0,
+      "e502": 0,
+      "e503": 0,
+      "oom": 0,
+      "levels": {
+        "e504": "ok",
+        "e502": "ok",
+        "e503": "ok",
+        "oom": "ok",
+        "filemover": "ok",
+        "synthetic": "ok"
+      },
+      "filemover_failures": [],
+      "synthetic": null
+    },
+    {
+      "name": "LOS",
+      "e504": 0,
+      "e502": 0,
+      "e503": 0,
+      "oom": 0,
+      "levels": {
+        "e504": "ok",
+        "e502": "ok",
+        "e503": "ok",
+        "oom": "ok",
+        "filemover": "ok",
+        "synthetic": "ok"
+      },
+      "filemover_failures": [],
+      "synthetic": null
+    },
+    {
+      "name": "URIF",
+      "e504": 0,
+      "e502": 6,
+      "e503": 0,
+      "oom": 0,
+      "levels": {
+        "e504": "ok",
+        "e502": "crit",
+        "e503": "ok",
+        "oom": "ok",
+        "filemover": "ok",
+        "synthetic": "ok"
+      },
+      "filemover_failures": [],
+      "synthetic": {
+        "name": "urifinvest",
+        "errors": 0
+      }
+    },
+    {
+      "name": "USALending",
+      "e504": 0,
+      "e502": 0,
+      "e503": 0,
+      "oom": 0,
+      "levels": {
+        "e504": "ok",
+        "e502": "ok",
+        "e503": "ok",
+        "oom": "ok",
+        "filemover": "ok",
+        "synthetic": "ok"
+      },
+      "filemover_failures": [],
+      "synthetic": {
+        "name": "usalending",
+        "errors": 0
+      }
+    },
+    {
+      "name": "ACE",
+      "e504": 0,
+      "e502": 0,
+      "e503": 2,
+      "oom": 0,
+      "levels": {
+        "e504": "ok",
+        "e502": "ok",
+        "e503": "crit",
+        "oom": "ok",
+        "filemover": "ok",
+        "synthetic": "ok"
+      },
+      "filemover_failures": [],
+      "synthetic": null
+    },
+    {
+      "name": "Other Synthetic Tests",
+      "e504": 0,
+      "e502": 0,
+      "e503": 0,
+      "oom": 0,
+      "levels": {
+        "e504": "ok",
+        "e502": "ok",
+        "e503": "ok",
+        "oom": "ok",
+        "filemover": "ok",
+        "synthetic": "ok"
+      },
+      "filemover_failures": [],
+      "synthetic": {
+        "name": "core.allocore.com",
+        "errors": 0
+      }
+    }
+  ],
+  "history": []
+};
+  </script>
+
+  <!-- ============================================================
+       REPORT RENDERING — no edits needed below this line
+  ============================================================ -->
+  <div id="report-root"></div>
+
+  <script>
+  (function() {
+    const d = REPORT_DATA;
+    const envs = d.environments;
+    const history = d.history || [];
+
+    const total = e => (e.e504||0) + (e.e502||0) + (e.e503||0) + (e.oom||0);
+
+    const METRIC_DEFS = [
+      { key: 'e504', label: '504' },
+      { key: 'e502', label: '502' },
+      { key: 'e503', label: '503' },
+      { key: 'oom',  label: 'OOM' },
+    ];
+
+    function levelOf(env, key) {
+      return (env.levels && env.levels[key]) || 'ok';
+    }
+
+    function fmTotal(env) {
+      return (env.filemover_failures||[]).reduce((s,j) => s + j.count, 0);
+    }
+
+    function severity(env) {
+      let worst = 'ok';
+      const consider = (lvl) => {
+        if (lvl === 'crit') worst = 'crit';
+        else if (lvl === 'warn' && worst !== 'crit') worst = 'warn';
+      };
+      for (const def of METRIC_DEFS) consider(levelOf(env, def.key));
+      consider(levelOf(env, 'filemover'));
+      consider(levelOf(env, 'synthetic'));
+      return worst === 'crit' ? 'critical' : worst === 'warn' ? 'warning' : 'ok';
+    }
+
+    const critical = envs.filter(e => severity(e) === 'critical');
+    const warnings = envs.filter(e => severity(e) === 'warning');
+    const clear    = envs.filter(e => severity(e) === 'ok');
+
+    const allFmJobs = envs.flatMap(e => (e.filemover_failures||[]).map(j => ({...j, env: e.name})));
+    const totalFm = allFmJobs.reduce((s,j) => s + j.count, 0);
+
+    const dateObj = new Date(d.date + 'T12:00:00');
+    const dateStr = dateObj.toLocaleDateString('en-US', { weekday:'long', year:'numeric', month:'long', day:'numeric' });
+
+    const needAttention = critical.length + warnings.length;
+    let badgeClass = needAttention === 0 ? 'ok' : critical.length > 0 ? 'critical' : 'warn';
+    let badgeText = needAttention === 0
+      ? 'All clear'
+      : needAttention === 1 ? '1 env needs attention'
+      : `${needAttention} envs need attention`;
+
+    function collectIssues() {
+      const issues = [];
+      for (const env of envs) {
+        for (const def of METRIC_DEFS) {
+          const lvl = levelOf(env, def.key);
+          if (lvl === 'ok') continue;
+          issues.push({ env: env.name, metric: def.label, count: env[def.key] || 0, level: lvl });
+        }
+        const fmLvl = levelOf(env, 'filemover');
+        if (fmLvl !== 'ok') {
+          issues.push({ env: env.name, metric: 'filemover', count: fmTotal(env), level: fmLvl });
+        }
+        const synLvl = levelOf(env, 'synthetic');
+        if (synLvl !== 'ok' && env.synthetic) {
+          issues.push({ env: env.name, metric: 'synthetic', count: env.synthetic.errors, level: synLvl });
+        }
+      }
+      issues.sort((a, b) => {
+        if (a.level !== b.level) return a.level === 'crit' ? -1 : 1;
+        return b.count - a.count;
+      });
+      return issues;
+    }
+
+    function issuesBar() {
+      const issues = collectIssues();
+      if (issues.length === 0) {
+        return `<div class="issues-bar"><span class="issues-label">Top issues</span><span class="issues-empty">All clear ✓</span></div>`;
+      }
+      const chips = issues.map(i =>
+        `<span class="issue-chip ${i.level}"><span class="issue-count">${i.count}</span><span class="issue-env">${i.env}</span><span class="issue-metric">${i.metric}</span></span>`
+      ).join('');
+      return `<div class="issues-bar"><span class="issues-label">Top issues</span>${chips}</div>`;
+    }
+
+    function trimOverflowChips() {
+      const bar = document.querySelector('.issues-bar');
+      if (!bar) return;
+      const maxRight = bar.getBoundingClientRect().right - parseFloat(getComputedStyle(bar).paddingRight);
+      const chips = bar.querySelectorAll('.issue-chip');
+      for (const chip of chips) {
+        if (chip.getBoundingClientRect().right > maxRight) {
+          chip.style.display = 'none';
+        }
+      }
+    }
+
+    function tagFor(level) {
+      if (level === 'crit') return `<span class="row-tag crit">critical</span>`;
+      if (level === 'warn') return `<span class="row-tag warn">warning</span>`;
+      return '';
+    }
+
+    function metricRow(name, n, level, valueOverride, showTag = true) {
+      const valClass = level === 'crit' ? 'nonzero-red' : level === 'warn' ? 'nonzero-amber' : 'zero';
+      const display = valueOverride !== undefined ? valueOverride : n;
+      const tag = showTag ? tagFor(level) : '';
+      return `<div class="metric-row">
+        <span class="metric-name">${name}</span>
+        <span class="metric-right">${tag}<span class="metric-val ${valClass}">${display}</span></span>
+      </div>`;
+    }
+
+    function envCard(env) {
+      const sev = severity(env);
+      const cardClass = sev === 'critical' ? 'has-critical' : sev === 'warning' ? 'has-warning' : 'all-clear';
+      const rows = METRIC_DEFS.map(def => {
+        const n = env[def.key] || 0;
+        return metricRow(def.label, n, levelOf(env, def.key));
+      }).join('');
+
+      const fm = fmTotal(env);
+      let extra = '';
+      if (fm > 0) {
+        extra += `<hr class="env-divider">` + metricRow('filemover fails', fm, levelOf(env, 'filemover'), undefined, false);
+      }
+      if (env.synthetic) {
+        const lvl = levelOf(env, 'synthetic');
+        const display = env.synthetic.errors === 0 ? '0 ✓' : env.synthetic.errors;
+        extra += `<hr class="env-divider">` + metricRow(`synthetic (${env.synthetic.name})`, env.synthetic.errors, lvl, display, false);
+      } else {
+        extra += `<hr class="env-divider">` + metricRow('synthetic', 0, 'ok', 'n/a', false);
+      }
+
+      return `
+      <div class="env-card ${cardClass}">
+        <div class="env-header">
+          <span class="env-name">${env.name}</span>
+        </div>
+        ${rows}
+        ${extra}
+      </div>`;
+    }
+
+    function clearSection() {
+      if (clear.length === 0) return '';
+      const chips = clear.map(e => `<span class="clear-chip">${e.name}</span>`).join('');
+      return `
+      <div class="clear-section">
+        <div class="clear-header">
+          <p class="section-label">No errors</p>
+          <span class="clear-subtitle">${clear.length} of ${envs.length} envs</span>
+        </div>
+        <div class="clear-chips">${chips}</div>
+      </div>`;
+    }
+
+    function fmSection() {
+      if (allFmJobs.length === 0) return `<div class="filemover-section"><p class="section-label">Filemover failures</p><span class="fm-empty">no failures today</span></div>`;
+      const chips = allFmJobs.map(j => `<span class="fm-job">${j.job} <span class="fm-count">${j.count}</span></span>`).join('');
+      const envNames = [...new Set(allFmJobs.map(j=>j.env))].join(', ');
+      return `
+      <div class="filemover-section">
+        <div class="fm-header">
+          <p class="section-label">Filemover failures</p>
+          <span class="fm-subtitle">${totalFm} failed jobs · ${envNames}</span>
+        </div>
+        <div class="fm-jobs">${chips}</div>
+      </div>`;
+    }
+
+    function trendSection() {
+      if (history.length === 0) return '';
+      const BAR_H = 44;
+      const MIN_BAR = 4;
+      const allDays = [...history.map(h => h.environments), Object.fromEntries(envs.map(e => [e.name, e]))];
+      const dateLabels = [...history.map(h => {
+        const dt = new Date(h.date + 'T12:00:00');
+        return dt.toLocaleDateString('en-US', {month:'short', day:'numeric'});
+      }), 'Today'];
+
+      const dateHeaderCells = dateLabels.map((l,i) =>
+        `<span class="date-lbl${i===dateLabels.length-1?' today':''}">${l}</span>`
+      ).join('');
+
+      const rows = envs.map(env => {
+        const dayTotals = allDays.map(day => {
+          const e = day[env.name] || {e504:0,e502:0,e503:0,oom:0};
+          return { t: total(e), e };
+        });
+        const rowMax = Math.max(...dayTotals.map(d=>d.t));
+        const todayTotal = dayTotals[dayTotals.length-1].t;
+
+        const bars = dayTotals.map((day, i) => {
+          const isToday = i === dayTotals.length - 1;
+          if (day.t === 0) {
+            return `<div class="day-col"><div class="day-flat${isToday?' today-col':''}"></div></div>`;
+          }
+          const h = rowMax > 0 ? Math.max((day.t / rowMax) * BAR_H, MIN_BAR) : 0;
+          const segs = [
+            { val: day.e.e504||0, color: '#c8392b' },
+            { val: day.e.e502||0, color: '#f0a099' },
+            { val: day.e.e503||0, color: '#b45309' },
+            { val: day.e.oom||0,  color: '#f5c97a' },
+          ].filter(s => s.val > 0);
+          const segHtml = segs.map(s => `<div style="flex:${s.val};background:${s.color};"></div>`).join('');
+          return `<div class="day-col"><div class="day-stack${isToday?' today-col':''}" style="height:${h}px;">${segHtml}</div></div>`;
+        }).join('');
+
+        const totalClass = todayTotal > 20 ? 'danger' : todayTotal === 0 ? 'ok' : 'neutral';
+        const totalDisplay = todayTotal > 0 ? todayTotal : '—';
+        return `
+        <div class="trend-row">
+          <span class="trend-env">${env.name}</span>
+          <div class="day-group">${bars}</div>
+          <span class="trend-total ${totalClass}">${totalDisplay}</span>
+        </div>`;
+      }).join('');
+
+      return `
+      <p class="section-label">Error volume — last ${allDays.length} days</p>
+      <div class="trend-section">
+        <div class="trend-legend">
+          <span class="leg-item"><span class="leg-swatch" style="background:#c8392b;"></span>504</span>
+          <span class="leg-item"><span class="leg-swatch" style="background:#f0a099;"></span>502</span>
+          <span class="leg-item"><span class="leg-swatch" style="background:#b45309;"></span>503</span>
+          <span class="leg-item"><span class="leg-swatch" style="background:#f5c97a;"></span>OOM</span>
+        </div>
+        <div class="date-header">
+          <div></div>
+          <div class="date-labels">${dateHeaderCells}</div>
+          <div></div>
+        </div>
+        ${rows}
+        <p class="trend-note">Bar heights scaled per environment — do not compare heights across rows. Today's total shown on the right.</p>
+      </div>`;
+    }
+
+    const html = `
+    <div class="header">
+      <div class="header-left">
+        <p class="report-title">ENV Health Status</p>
+        <p class="report-meta">${dateStr} · ${d.time} · ${envs.length} environments</p>
+        <p class="report-meta">${envs.map(e => e.name).join(', ')}</p>
+        </div>
+    </div>
+
+    ${issuesBar()}
+
+    ${(critical.length + warnings.length) > 0 ? `
+    <p class="section-label">Environment breakdown</p>
+    <div class="env-grid">
+      ${critical.concat(warnings).map(envCard).join('')}
+    </div>` : ''}
+
+    ${clearSection()}
+
+    ${fmSection()}
+
+    ${trendSection()}
+    `;
+
+    document.getElementById('report-root').innerHTML = html;
+    trimOverflowChips();
+    window.addEventListener('resize', trimOverflowChips);
+  })();
+  </script>
+
+</div>
+</body>
+</html>
+
+<!--
+=================================================================
+PYTHON HELPER — copy into your datadog script
+=================================================================
+
+import json, re
+from pathlib import Path
+from datetime import date
+
+def write_report(today_data: dict, history: list, output_path: str = "daily_report.html"):
+    """
+    Inject live data into the report template.
+
+    today_data format:
+    {
+        "date": "2026-05-20",          # ISO date string
+        "time": "07:00",               # HH:MM string
+        "environments": [
+            {
+                "name": "ULP",
+                "e504": 153,
+                "e502": 202,
+                "e503": 8,
+                "oom": 5,
+                "filemover_failures": [    # empty list if none
+                    {"job": "stgwe-etran-oracle-sync-run", "count": 3}
+                ],
+                "synthetic": None          # or {"name": "urifinvest", "errors": 0}
+            },
+            ...
+        ]
+    }
+
+    history format: list of dicts (oldest first, NOT including today):
+    [
+        {
+            "date": "2026-05-16",
+            "environments": {
+                "ULP":  {"e504": 80, "e502": 120, "e503": 4, "oom": 2},
+                "URIF": {"e504": 2,  "e502": 12,  "e503": 0, "oom": 1},
+                ...
+            }
+        },
+        ...
+    ]
+    """
+    payload = {**today_data, "history": history}
+    json_str = json.dumps(payload, indent=2)
+
+    html = Path(output_path).read_text(encoding="utf-8")
+    html = re.sub(
+        r'const REPORT_DATA = \{.*?\};',
+        f'const REPORT_DATA = {
+  "date": "2026-05-26",
+  "time": "11:58",
+  "environments": [
+    {
+      "name": "ULP",
+      "e504": 8,
+      "e502": 0,
+      "e503": 0,
+      "oom": 8,
+      "levels": {
+        "e504": "warn",
+        "e502": "ok",
+        "e503": "ok",
+        "oom": "crit",
+        "filemover": "ok",
+        "synthetic": "ok"
+      },
+      "filemover_failures": [],
+      "synthetic": null
+    },
+    {
+      "name": "CLS",
+      "e504": 0,
+      "e502": 0,
+      "e503": 0,
+      "oom": 0,
+      "levels": {
+        "e504": "ok",
+        "e502": "ok",
+        "e503": "ok",
+        "oom": "ok",
+        "filemover": "ok",
+        "synthetic": "ok"
+      },
+      "filemover_failures": [],
+      "synthetic": null
+    },
+    {
+      "name": "LOS",
+      "e504": 0,
+      "e502": 0,
+      "e503": 0,
+      "oom": 0,
+      "levels": {
+        "e504": "ok",
+        "e502": "ok",
+        "e503": "ok",
+        "oom": "ok",
+        "filemover": "ok",
+        "synthetic": "ok"
+      },
+      "filemover_failures": [],
+      "synthetic": null
+    },
+    {
+      "name": "URIF",
+      "e504": 0,
+      "e502": 6,
+      "e503": 0,
+      "oom": 0,
+      "levels": {
+        "e504": "ok",
+        "e502": "crit",
+        "e503": "ok",
+        "oom": "ok",
+        "filemover": "ok",
+        "synthetic": "ok"
+      },
+      "filemover_failures": [],
+      "synthetic": {
+        "name": "urifinvest",
+        "errors": 0
+      }
+    },
+    {
+      "name": "USALending",
+      "e504": 0,
+      "e502": 0,
+      "e503": 0,
+      "oom": 0,
+      "levels": {
+        "e504": "ok",
+        "e502": "ok",
+        "e503": "ok",
+        "oom": "ok",
+        "filemover": "ok",
+        "synthetic": "ok"
+      },
+      "filemover_failures": [],
+      "synthetic": {
+        "name": "usalending",
+        "errors": 0
+      }
+    },
+    {
+      "name": "ACE",
+      "e504": 0,
+      "e502": 0,
+      "e503": 2,
+      "oom": 0,
+      "levels": {
+        "e504": "ok",
+        "e502": "ok",
+        "e503": "crit",
+        "oom": "ok",
+        "filemover": "ok",
+        "synthetic": "ok"
+      },
+      "filemover_failures": [],
+      "synthetic": null
+    },
+    {
+      "name": "Other Synthetic Tests",
+      "e504": 0,
+      "e502": 0,
+      "e503": 0,
+      "oom": 0,
+      "levels": {
+        "e504": "ok",
+        "e502": "ok",
+        "e503": "ok",
+        "oom": "ok",
+        "filemover": "ok",
+        "synthetic": "ok"
+      },
+      "filemover_failures": [],
+      "synthetic": {
+        "name": "core.allocore.com",
+        "errors": 0
+      }
+    }
+  ],
+  "history": []
+};',
+        html,
+        flags=re.DOTALL
+    )
+    Path(output_path).write_text(html, encoding="utf-8")
+    print(f"Report written to {output_path}")
+
+
+# --- Example usage ---
+# today = {
+#     "date": str(date.today()),
+#     "time": "07:00",
+#     "environments": [ ... ]  # built from your datadog API calls
+# }
+# history = load_history_from_db_or_file()  # your existing store
+# write_report(today, history, "daily_report.html")
+=================================================================
+-->

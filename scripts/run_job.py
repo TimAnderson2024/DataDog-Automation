@@ -1,10 +1,11 @@
 import logging
 import os
+from unittest import result
 import boto3
 
 from jinja2 import Environment
 
-from datetime import date
+from datetime import date, datetime
 from string import Template
 from env_data import EnvData, EnvData, EnvDataFactory, Result
 from app_config import AppConfig
@@ -264,7 +265,7 @@ QUERIES = [
   }
 ]
 
-def identify_unique_filemover_jobs(log_results: dict[str, Result]) -> set[str]:
+def identify_unique_filemover_jobs(log_results: dict[str, Result]) -> dict[str, int]:
     unique_jobs: dict[str, int] = {}
 
     for failed_job in log_results.raw:
@@ -292,6 +293,60 @@ def build_report(config: AppConfig, all_env_data: list[EnvData]) -> str:
     
     return str(output_path)
 
+import json, re
+from pathlib import Path
+from datetime import date
+
+def build_visual_report(today_data: dict, history: list, output_path: str = "daily_report.html", template_path: str = "visual-report-template.html"):
+    """
+    Inject live data into the report template.
+
+    today_data format:
+    {
+        "date": "2026-05-20",          # ISO date string
+        "time": "07:00",               # HH:MM string
+        "environments": [
+            {
+                "name": "ULP",
+                "e504": 153,
+                "e502": 202,
+                "e503": 8,
+                "oom": 5,
+                "filemover_failures": [    # empty list if none
+                    {"job": "stgwe-etran-oracle-sync-run", "count": 3}
+                ],
+                "synthetic": None          # or {"name": "urifinvest", "errors": 0}
+            },
+            ...
+        ]
+    }
+
+    history format: list of dicts (oldest first, NOT including today):
+    [
+        {
+            "date": "2026-05-16",
+            "environments": {
+                "ULP":  {"e504": 80, "e502": 120, "e503": 4, "oom": 2},
+                "URIF": {"e504": 2,  "e502": 12,  "e503": 0, "oom": 1},
+                ...
+            }
+        },
+        ...
+    ]
+    """
+    payload = {**today_data, "history": history}
+    json_str = json.dumps(payload, indent=2)
+
+    html = Path(template_path).read_text(encoding="utf-8")
+    html = re.sub(
+        r'const REPORT_DATA = \{.*?\};',
+        f'const REPORT_DATA = {json_str};',
+        html,
+        flags=re.DOTALL
+    )
+    Path(output_path).write_text(html, encoding="utf-8")
+    print(f"Report written to {output_path}")
+  
 def upload_report_to_s3(config: AppConfig, report_path: str) -> None:
     s3_client = boto3.client('s3')
     
@@ -320,12 +375,62 @@ def run_job(config: AppConfig) -> None:
               env.filtered_fm_jobs
             )
         else:
+            env.filtered_fm_jobs = {}
             logger.info("No filemover failures found in %s", env.env)
 
     logger.info("Building report...")
     report_path = build_report(config, all_env_data)
     logger.info(f"Report built successfully at {report_path}. Attempting to upload to S3...")
     # upload_report_to_s3(config, report_path)
+
+    def _agg(results: dict, key: str) -> int:
+        result = results.get(key)
+        return result.aggregate if result else 0
+
+    def _level(result: Result | None) -> str:
+        if not result or result.aggregate == 0:
+            return "ok"
+        return "crit" if result.aggregate >= result.red_threshold else "warn"
+
+    def _first_synthetic(env: EnvData):
+        if not env.synthetic_results:
+            return None
+        name, result = next(iter(env.synthetic_results.items()))
+        return {"name": name, "errors": result.aggregate}
+
+    def _synthetic_level(env: EnvData) -> str:
+        if not env.synthetic_results:
+            return "ok"
+        return _level(next(iter(env.synthetic_results.values())))
+
+    build_visual_report(
+        today_data={
+            "date": str(date.today()),
+            "time": datetime.now().strftime("%H:%M"),
+            "environments": [
+                {
+                    "name": env.env,
+                    "e504": _agg(env._errs, "504"),
+                    "e502": _agg(env._errs, "502"),
+                    "e503": _agg(env._errs, "503"),
+                    "oom": _agg(env.event_results, "oom"),
+                    "levels": {
+                        "e504": _level(env._errs.get("504")),
+                        "e502": _level(env._errs.get("502")),
+                        "e503": _level(env._errs.get("503")),
+                        "oom": _level(env.event_results.get("oom")),
+                        "filemover": _level(env.log_results.get("failed_fm_jobs")),
+                        "synthetic": _synthetic_level(env),
+                    },
+                    "filemover_failures": [{"job": job, "count": count} for job, count in env.filtered_fm_jobs.items()],
+                    "synthetic": _first_synthetic(env),
+                }
+                for env in all_env_data
+            ]
+        },
+        history=[],
+        output_path="daily_report.html"
+    )
 
     logger.info("Sending Slack message...")
     messenger = SlackMessenger(all_env_data)
@@ -335,6 +440,6 @@ def run_job(config: AppConfig) -> None:
     secrets = get_aws_secrets_helper([secret_name], region_name)
     slack_api_key = secrets["daily-monitoring-us-east-2"].get("SLACK_API_KEY")
 
-    send_slack_message(messenger.message_blocks, config.output_channel_id, slack_api_key)
+    # send_slack_message(messenger.message_blocks, config.output_channel_id, slack_api_key)
     logger.info("Slack message sent successfully.")
     logger.info("Job execution completed, shutting down...")
