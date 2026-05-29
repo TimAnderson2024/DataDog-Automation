@@ -291,24 +291,49 @@
   ============================================================ -->
   <script>
   const REPORT_DATA = {
-  "date": "2026-05-28",
-  "time": "16:02",
+  "date": "2026-05-26",
+  "time": "15:46",
   "environments": [
     {
       "name": "ULP",
-      "e504": 10,
-      "e502": 6,
-      "e503": 0,
-      "oom": 2,
+      "e504": 157,
+      "e502": 121,
+      "e503": 8,
+      "oom": 20,
       "levels": {
-        "e504": "ok",
+        "e504": "warning",
         "e502": "warning",
-        "e503": "ok",
+        "e503": "warning",
         "oom": "warning",
-        "filemover": "ok",
+        "filemover": "warning",
         "synthetic": "ok"
       },
-      "filemover_failures": [],
+      "filemover_failures": [
+        {
+          "job": "stgwe-etran-django-elv-near-realtime",
+          "count": 2
+        },
+        {
+          "job": "stgwe-etran-adhoc-loan-serv-up",
+          "count": 2
+        },
+        {
+          "job": "stgwe-etran-wd-document",
+          "count": 1
+        },
+        {
+          "job": "stgwe-etran-django-elv-rel-near-realtime",
+          "count": 1
+        },
+        {
+          "job": "stgwe-filemover-ktrs",
+          "count": 1
+        },
+        {
+          "job": "stgwe-etran-oracle-sync-run-2",
+          "count": 1
+        }
+      ],
       "synthetic": null
     },
     {
@@ -330,14 +355,14 @@
     },
     {
       "name": "LOS",
-      "e504": 8,
-      "e502": 15,
-      "e503": 0,
-      "oom": 4,
+      "e504": 2,
+      "e502": 10,
+      "e503": 521,
+      "oom": 3,
       "levels": {
-        "e504": "warning",
+        "e504": "moderate",
         "e502": "warning",
-        "e503": "ok",
+        "e503": "warning",
         "oom": "warning",
         "filemover": "ok",
         "synthetic": "ok"
@@ -348,12 +373,12 @@
     {
       "name": "URIF",
       "e504": 0,
-      "e502": 0,
+      "e502": 28,
       "e503": 0,
       "oom": 0,
       "levels": {
         "e504": "ok",
-        "e502": "ok",
+        "e502": "warning",
         "e503": "ok",
         "oom": "ok",
         "filemover": "ok",
@@ -377,19 +402,19 @@
         "e503": "ok",
         "oom": "ok",
         "filemover": "ok",
-        "synthetic": "ok"
+        "synthetic": "warning"
       },
       "filemover_failures": [],
       "synthetic": {
         "name": "usalending",
-        "errors": 0
+        "errors": 1
       }
     },
     {
       "name": "ACE",
       "e504": 0,
       "e502": 0,
-      "e503": 4,
+      "e503": 19,
       "oom": 0,
       "levels": {
         "e504": "ok",
@@ -785,24 +810,49 @@ def write_report(today_data: dict, history: list, output_path: str = "daily_repo
     html = re.sub(
         r'const REPORT_DATA = \{.*?\};',
         f'const REPORT_DATA = {
-  "date": "2026-05-28",
-  "time": "16:02",
+  "date": "2026-05-26",
+  "time": "15:46",
   "environments": [
     {
       "name": "ULP",
-      "e504": 10,
-      "e502": 6,
-      "e503": 0,
-      "oom": 2,
+      "e504": 157,
+      "e502": 121,
+      "e503": 8,
+      "oom": 20,
       "levels": {
-        "e504": "ok",
+        "e504": "warning",
         "e502": "warning",
-        "e503": "ok",
+        "e503": "warning",
         "oom": "warning",
-        "filemover": "ok",
+        "filemover": "warning",
         "synthetic": "ok"
       },
-      "filemover_failures": [],
+      "filemover_failures": [
+        {
+          "job": "stgwe-etran-django-elv-near-realtime",
+          "count": 2
+        },
+        {
+          "job": "stgwe-etran-adhoc-loan-serv-up",
+          "count": 2
+        },
+        {
+          "job": "stgwe-etran-wd-document",
+          "count": 1
+        },
+        {
+          "job": "stgwe-etran-django-elv-rel-near-realtime",
+          "count": 1
+        },
+        {
+          "job": "stgwe-filemover-ktrs",
+          "count": 1
+        },
+        {
+          "job": "stgwe-etran-oracle-sync-run-2",
+          "count": 1
+        }
+      ],
       "synthetic": null
     },
     {
@@ -824,14 +874,14 @@ def write_report(today_data: dict, history: list, output_path: str = "daily_repo
     },
     {
       "name": "LOS",
-      "e504": 8,
-      "e502": 15,
-      "e503": 0,
-      "oom": 4,
+      "e504": 2,
+      "e502": 10,
+      "e503": 521,
+      "oom": 3,
       "levels": {
-        "e504": "warning",
+        "e504": "moderate",
         "e502": "warning",
-        "e503": "ok",
+        "e503": "warning",
         "oom": "warning",
         "filemover": "ok",
         "synthetic": "ok"
@@ -842,12 +892,12 @@ def write_report(today_data: dict, history: list, output_path: str = "daily_repo
     {
       "name": "URIF",
       "e504": 0,
-      "e502": 0,
+      "e502": 28,
       "e503": 0,
       "oom": 0,
       "levels": {
         "e504": "ok",
-        "e502": "ok",
+        "e502": "warning",
         "e503": "ok",
         "oom": "ok",
         "filemover": "ok",
@@ -871,19 +921,19 @@ def write_report(today_data: dict, history: list, output_path: str = "daily_repo
         "e503": "ok",
         "oom": "ok",
         "filemover": "ok",
-        "synthetic": "ok"
+        "synthetic": "warning"
       },
       "filemover_failures": [],
       "synthetic": {
         "name": "usalending",
-        "errors": 0
+        "errors": 1
       }
     },
     {
       "name": "ACE",
       "e504": 0,
       "e502": 0,
-      "e503": 4,
+      "e503": 19,
       "oom": 0,
       "levels": {
         "e504": "ok",

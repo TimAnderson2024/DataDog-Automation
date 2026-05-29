@@ -20,4 +20,4 @@ class AppConfig:
         # Live channel: "C07050LEJA3"
         # Test channel: "C0ALY9QJ30T"
         # self.output_channel_id = "{{ .Values.dailyMonitoring.slackChannelId }}"
-        self.s3_bucket = "{{ .Values.dailyMonitoring.s3BucketName }}"
+        self.s3_bucket = "stgcore-daily-monitoring-base-us-east-2"

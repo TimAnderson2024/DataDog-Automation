@@ -291,20 +291,20 @@
   ============================================================ -->
   <script>
   const REPORT_DATA = {
-  "date": "2026-05-28",
-  "time": "16:02",
+  "date": "2026-05-26",
+  "time": "15:48",
   "environments": [
     {
       "name": "ULP",
-      "e504": 10,
-      "e502": 6,
+      "e504": 17,
+      "e502": 0,
       "e503": 0,
-      "oom": 2,
+      "oom": 0,
       "levels": {
         "e504": "ok",
-        "e502": "warning",
+        "e502": "ok",
         "e503": "ok",
-        "oom": "warning",
+        "oom": "ok",
         "filemover": "ok",
         "synthetic": "ok"
       },
@@ -330,15 +330,15 @@
     },
     {
       "name": "LOS",
-      "e504": 8,
-      "e502": 15,
+      "e504": 0,
+      "e502": 0,
       "e503": 0,
-      "oom": 4,
+      "oom": 0,
       "levels": {
-        "e504": "warning",
-        "e502": "warning",
+        "e504": "ok",
+        "e502": "ok",
         "e503": "ok",
-        "oom": "warning",
+        "oom": "ok",
         "filemover": "ok",
         "synthetic": "ok"
       },
@@ -348,12 +348,12 @@
     {
       "name": "URIF",
       "e504": 0,
-      "e502": 0,
+      "e502": 4,
       "e503": 0,
       "oom": 0,
       "levels": {
         "e504": "ok",
-        "e502": "ok",
+        "e502": "warning",
         "e503": "ok",
         "oom": "ok",
         "filemover": "ok",
@@ -389,7 +389,7 @@
       "name": "ACE",
       "e504": 0,
       "e502": 0,
-      "e503": 4,
+      "e503": 2,
       "oom": 0,
       "levels": {
         "e504": "ok",
@@ -785,20 +785,20 @@ def write_report(today_data: dict, history: list, output_path: str = "daily_repo
     html = re.sub(
         r'const REPORT_DATA = \{.*?\};',
         f'const REPORT_DATA = {
-  "date": "2026-05-28",
-  "time": "16:02",
+  "date": "2026-05-26",
+  "time": "15:48",
   "environments": [
     {
       "name": "ULP",
-      "e504": 10,
-      "e502": 6,
+      "e504": 17,
+      "e502": 0,
       "e503": 0,
-      "oom": 2,
+      "oom": 0,
       "levels": {
         "e504": "ok",
-        "e502": "warning",
+        "e502": "ok",
         "e503": "ok",
-        "oom": "warning",
+        "oom": "ok",
         "filemover": "ok",
         "synthetic": "ok"
       },
@@ -824,15 +824,15 @@ def write_report(today_data: dict, history: list, output_path: str = "daily_repo
     },
     {
       "name": "LOS",
-      "e504": 8,
-      "e502": 15,
+      "e504": 0,
+      "e502": 0,
       "e503": 0,
-      "oom": 4,
+      "oom": 0,
       "levels": {
-        "e504": "warning",
-        "e502": "warning",
+        "e504": "ok",
+        "e502": "ok",
         "e503": "ok",
-        "oom": "warning",
+        "oom": "ok",
         "filemover": "ok",
         "synthetic": "ok"
       },
@@ -842,12 +842,12 @@ def write_report(today_data: dict, history: list, output_path: str = "daily_repo
     {
       "name": "URIF",
       "e504": 0,
-      "e502": 0,
+      "e502": 4,
       "e503": 0,
       "oom": 0,
       "levels": {
         "e504": "ok",
-        "e502": "ok",
+        "e502": "warning",
         "e503": "ok",
         "oom": "ok",
         "filemover": "ok",
@@ -883,7 +883,7 @@ def write_report(today_data: dict, history: list, output_path: str = "daily_repo
       "name": "ACE",
       "e504": 0,
       "e502": 0,
-      "e503": 4,
+      "e503": 2,
       "oom": 0,
       "levels": {
         "e504": "ok",

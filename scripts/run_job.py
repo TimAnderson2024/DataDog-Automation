@@ -8,7 +8,7 @@ from datetime import date, datetime
 from env_data import EnvData, EnvData, EnvDataFactory, Result
 from app_config import AppConfig
 from slack_messenger import SlackMessenger
-from external_helpers import get_aws_secrets_helper
+from external_helpers import get_aws_secrets_helper, send_slack_message, send_slack_file
 
 logger = logging.getLogger(__name__)
 
@@ -343,7 +343,6 @@ def build_visual_report(today_data: dict, history: list, output_path: str = "dai
         flags=re.DOTALL
     )
     Path(output_path).write_text(html, encoding="utf-8")
-    print(f"Report written to {output_path}")
   
 def upload_report_to_s3(config: AppConfig, report_path: str) -> None:
     s3_client = boto3.client('s3')
@@ -352,7 +351,7 @@ def upload_report_to_s3(config: AppConfig, report_path: str) -> None:
     report_filename = os.path.basename(report_path)
     
     # Construct the S3 key
-    s3_key = f"reports/{report_filename}"
+    s3_key = f"reports/{report_filename}-{date.today()}.html"
     
     # Upload the file
     s3_client.upload_file(report_path, config.s3_bucket, s3_key)
@@ -377,9 +376,8 @@ def run_job(config: AppConfig) -> None:
             logger.info("No filemover failures found in %s", env.env)
 
     logger.info("Building report...")
-    report_path = build_report(config, all_env_data)
-    logger.info(f"Report built successfully at {report_path}. Attempting to upload to S3...")
-    # upload_report_to_s3(config, report_path)
+    # report_path = build_report(config, all_env_data)
+    # logger.info(f"Report built successfully. Attempting to upload to S3...")
 
     def _agg(results: dict, key: str) -> int:
         result = results.get(key)
@@ -430,6 +428,8 @@ def run_job(config: AppConfig) -> None:
         output_path="daily_report.html"
     )
 
+    upload_report_to_s3(config, "./daily_report.html")
+
     logger.info("Sending Slack message...")
     messenger = SlackMessenger(all_env_data)
     messenger.build_message()
@@ -438,6 +438,7 @@ def run_job(config: AppConfig) -> None:
     secrets = get_aws_secrets_helper([secret_name], region_name)
     slack_api_key = secrets["daily-monitoring-us-east-2"].get("SLACK_API_KEY")
 
-    # send_slack_message(messenger.message_blocks, config.output_channel_id, slack_api_key)
+    send_slack_message(messenger.message_blocks, config.output_channel_id, slack_api_key)
+    send_slack_file("./daily_report.html", config.output_channel_id, slack_api_key)
     logger.info("Slack message sent successfully.")
     logger.info("Job execution completed, shutting down...")
