@@ -8,10 +8,6 @@ metadata:
     env: {{ required "value expected" .Values.env }}
 
 data:
-  .env: |-
-    SECRET_NAME = daily-monitoring-us-east-2
-    AWS_REGION = us-east-2
-
   app_config.py: |-
     from pathlib import Path
     
@@ -26,16 +22,16 @@ data:
         s3_key_prefix: str
     
         def __init__(self):
-            self.time_from = "now-24h"
+            self.time_from = "now-8h"
             self.time_to = "now"
             self.output_path = Path("output")
             self.query_path = Path("queries.json")
             self.template_path = Path("slack_template.md")
-            self.output_channel_id = "C0ALY9QJ30T"
+            self.output_channel_id = "C07050LEJA3"
             # Live channel: "C07050LEJA3"
             # Test channel: "C0ALY9QJ30T"
             # self.output_channel_id = "{{ .Values.dailyMonitoring.slackChannelId }}"
-            self.s3_bucket = "{{ .Values.dailyMonitoring.s3BucketName }}"
+            self.s3_bucket = "stgcore-daily-monitoring-base-us-east-2"
 
   external_helpers.py: |-
     import json
@@ -45,10 +41,11 @@ data:
     
     import boto3
     import requests
+    import os
     
     logger = logging.getLogger(__name__)
     
-    __all__ = ["get_aws_secrets_helper", "send_slack_message"]
+    __all__ = ["get_aws_secrets_helper", "send_slack_message", "send_slack_file"]
     
     
     def get_aws_secrets_helper(aws_secret_ids: List[str], aws_region_name: str) -> Dict[str, Dict[str, str]]:
@@ -116,6 +113,64 @@ data:
         except requests.exceptions.RequestException as exc:
             logger.error("Failed to send Slack message: %s", exc)
             raise
+    
+    
+    def send_slack_file(file_path: str, slack_channel: str, slack_bot_token: str) -> None:
+        """Upload a file to a Slack channel via Slack Web API.
+    
+        Logs outcomes; raises on transport-level errors.
+        """
+        # Step 1: Request an external upload URL from Slack
+        filename = os.path.basename(file_path)
+        file_size = os.path.getsize(file_path)
+    
+        get_url_resp = requests.post(
+            "https://slack.com/api/files.getUploadURLExternal",
+            headers={"Authorization": f"Bearer {slack_bot_token}"},
+            data={"filename": filename, "length": str(file_size)},
+            timeout=15,
+        )
+        get_url_resp.raise_for_status()
+        get_url_data = get_url_resp.json()
+        if not get_url_data.get("ok"):
+            logger.error("files.getUploadURLExternal failed: %s", get_url_data)
+            raise RuntimeError(f"files.getUploadURLExternal failed: {get_url_data.get('error')}")
+    
+        upload_url = get_url_data.get("upload_url")
+        file_id = get_url_data.get("file_id")
+        if not upload_url or not file_id:
+            raise RuntimeError("files.getUploadURLExternal did not return upload_url or file_id")
+    
+        # Step 2: PUT the raw file bytes to the provided upload_url
+        with open(file_path, "rb") as fh:
+            put_headers = {"Content-Type": "application/octet-stream"}
+            put_resp = requests.post(upload_url, headers=put_headers, data=fh, timeout=60)
+    
+        # Some endpoints may return plain HTTP 200 with body 'OK - <length>'
+        if put_resp.status_code < 200 or put_resp.status_code >= 300:
+            logger.error("Upload to external URL failed: status=%s, body=%s", put_resp.status_code, put_resp.text)
+            raise RuntimeError(f"Upload to external URL failed: status={put_resp.status_code}")
+    
+        # Step 3: Tell Slack the upload is complete and share it to a channel
+        files_payload = json.dumps([{"id": file_id, "title": filename}])
+        complete_resp = requests.post(
+            "https://slack.com/api/files.completeUploadExternal",
+            headers={"Authorization": f"Bearer {slack_bot_token}"},
+            data={
+                "files": files_payload,
+                "channel_id": slack_channel if slack_channel and slack_channel.startswith("C") else None,
+                "channels": slack_channel if slack_channel and not slack_channel.startswith("C") else None,
+            },
+            timeout=15,
+        )
+        complete_resp.raise_for_status()
+        complete_data = complete_resp.json()
+        if not complete_data.get("ok"):
+            logger.error("files.completeUploadExternal failed: %s", complete_data)
+            raise RuntimeError(f"files.completeUploadExternal failed: {complete_data.get('error')}")
+    
+        logger.info("Completed external upload of '%s' (file_id=%s) to Slack.", filename, file_id)
+        return complete_data
 
   queries.json: |-
     [
@@ -512,10 +567,11 @@ data:
     logger = logging.getLogger(__name__)
     
     DATADOG_URL = "datadoghq.com"
+    FED_DATADOG_URL = "ddog-gov.com"
     
-    def get_dd_config(api_key: str, app_key: str) -> Configuration:
+    def get_dd_config(api_key: str, app_key: str, site: str = DATADOG_URL) -> Configuration:
         ddconfig = Configuration()
-        ddconfig.server_variables["site"] = DATADOG_URL
+        ddconfig.server_variables["site"] = site
         
         secret_name = os.getenv("SECRET_NAME")
         region_name = os.getenv("AWS_REGION")
@@ -754,7 +810,7 @@ data:
     
             try:
                 self.dd_config = q.get_dd_config(
-                    json_config["API_KEY"], json_config["APP_KEY"]
+                    json_config["API_KEY"], json_config["APP_KEY"], json_config.get("DD_URL", q.DATADOG_URL)
                 )
             except Exception as e:
                 print(
@@ -1045,12 +1101,11 @@ data:
     
     from jinja2 import Environment
     
-    from datetime import date
-    from string import Template
+    from datetime import date, datetime
     from env_data import EnvData, EnvData, EnvDataFactory, Result
     from app_config import AppConfig
     from slack_messenger import SlackMessenger
-    from external_helpers import get_aws_secrets_helper, send_slack_message
+    from external_helpers import get_aws_secrets_helper, send_slack_message, send_slack_file
     
     logger = logging.getLogger(__name__)
     
@@ -1292,20 +1347,44 @@ data:
         }
       },
       {
+          "name": "USDA",
+          "DD_URL": "ddog-gov.com",
+          "API_KEY": "FEDHIVE_USDA_API_KEY",
+          "APP_KEY": "FEDHIVE_USDA_APP_KEY",
+          "queries": {
+            "504": {
+              "type": "aggregate",
+              "query": "env:usda status:error @http.status_code:504",
+              "red_threshold": 1
+            },
+            "502": {
+              "type": "aggregate",
+              "query": "env:usda status:error @http.status_code:502",
+              "red_threshold": 1
+            },
+            "503": {
+              "type": "aggregate",
+              "query": "env:usda status:error @http.status_code:503",
+              "red_threshold": 1,
+              "manual_threshold": 1
+            },
+            "oom": {
+              "type": "event",
+              "query": "env:usda status:error (OutOfMemoryError OR \"out of memory\" OR OOM)",
+              "red_threshold": 1
+            }
+          }
+      },
+      {
         "name": "Other Synthetic Tests",
         "API_KEY": "DD_ULP_API_KEY",
         "APP_KEY": "DD_ULP_APP_KEY",
         "queries": {
-          "core.allocore.com": {
-            "type": "synthetic",
-            "query": "bsi-2qz-vvt",
-            "red_threshold": 1
-          }
         }
       }
     ]
     
-    def identify_unique_filemover_jobs(log_results: dict[str, Result]) -> set[str]:
+    def identify_unique_filemover_jobs(log_results: dict[str, Result]) -> dict[str, int]:
         unique_jobs: dict[str, int] = {}
     
         for failed_job in log_results.raw:
@@ -1333,6 +1412,59 @@ data:
         
         return str(output_path)
     
+    import json, re
+    from pathlib import Path
+    from datetime import date
+    
+    def build_visual_report(today_data: dict, history: list, output_path: str = "daily_report.html", template_path: str = "visual-report-template.html"):
+        """
+        Inject live data into the report template.
+    
+        today_data format:
+        {
+            "date": "2026-05-20",          # ISO date string
+            "time": "07:00",               # HH:MM string
+            "environments": [
+                {
+                    "name": "ULP",
+                    "e504": 153,
+                    "e502": 202,
+                    "e503": 8,
+                    "oom": 5,
+                    "filemover_failures": [    # empty list if none
+                        {"job": "stgwe-etran-oracle-sync-run", "count": 3}
+                    ],
+                    "synthetic": None          # or {"name": "urifinvest", "errors": 0}
+                },
+                ...
+            ]
+        }
+    
+        history format: list of dicts (oldest first, NOT including today):
+        [
+            {
+                "date": "2026-05-16",
+                "environments": {
+                    "ULP":  {"e504": 80, "e502": 120, "e503": 4, "oom": 2},
+                    "URIF": {"e504": 2,  "e502": 12,  "e503": 0, "oom": 1},
+                    ...
+                }
+            },
+            ...
+        ]
+        """
+        payload = {**today_data, "history": history}
+        json_str = json.dumps(payload, indent=2)
+    
+        html = Path(template_path).read_text(encoding="utf-8")
+        html = re.sub(
+            r'const REPORT_DATA = \{.*?\};',
+            f'const REPORT_DATA = {json_str};',
+            html,
+            flags=re.DOTALL
+        )
+        Path(output_path).write_text(html, encoding="utf-8")
+      
     def upload_report_to_s3(config: AppConfig, report_path: str) -> None:
         s3_client = boto3.client('s3')
         
@@ -1340,7 +1472,7 @@ data:
         report_filename = os.path.basename(report_path)
         
         # Construct the S3 key
-        s3_key = f"reports/{report_filename}"
+        s3_key = f"reports/{report_filename}-{date.today()}.html"
         
         # Upload the file
         s3_client.upload_file(report_path, config.s3_bucket, s3_key)
@@ -1361,12 +1493,63 @@ data:
                   env.filtered_fm_jobs
                 )
             else:
+                env.filtered_fm_jobs = {}
                 logger.info("No filemover failures found in %s", env.env)
     
         logger.info("Building report...")
-        report_path = build_report(config, all_env_data)
-        logger.info(f"Report built successfully at {report_path}. Attempting to upload to S3...")
-        # upload_report_to_s3(config, report_path)
+        # report_path = build_report(config, all_env_data)
+        # logger.info(f"Report built successfully. Attempting to upload to S3...")
+    
+        def _agg(results: dict, key: str) -> int:
+            result = results.get(key)
+            return result.aggregate if result else 0
+    
+        def _level(result: Result | None) -> str:
+            if not result or result.aggregate < result.yellow_threshold:
+                return "ok"
+            return "warning" if result.aggregate >= result.red_threshold else "moderate"
+    
+        def _first_synthetic(env: EnvData):
+            if not env.synthetic_results:
+                return None
+            name, result = next(iter(env.synthetic_results.items()))
+            return {"name": name, "errors": result.aggregate}
+    
+        def _synthetic_level(env: EnvData) -> str:
+            if not env.synthetic_results:
+                return "ok"
+            return _level(next(iter(env.synthetic_results.values())))
+    
+        build_visual_report(
+            today_data={
+                "date": str(date.today()),
+                "time": datetime.now().strftime("%H:%M"),
+                "environments": [
+                    {
+                        "name": env.env,
+                        "e504": _agg(env._errs, "504"),
+                        "e502": _agg(env._errs, "502"),
+                        "e503": _agg(env._errs, "503"),
+                        "oom": _agg(env.event_results, "oom"),
+                        "levels": {
+                            "e504": _level(env._errs.get("504")),
+                            "e502": _level(env._errs.get("502")),
+                            "e503": _level(env._errs.get("503")),
+                            "oom": _level(env.event_results.get("oom")),
+                            "filemover": _level(env.log_results.get("failed_fm_jobs")),
+                            "synthetic": _synthetic_level(env),
+                        },
+                        "filemover_failures": [{"job": job, "count": count} for job, count in env.filtered_fm_jobs.items()],
+                        "synthetic": _first_synthetic(env),
+                    }
+                    for env in all_env_data
+                ]
+            },
+            history=[],
+            output_path="daily_report.html"
+        )
+    
+        upload_report_to_s3(config, "./daily_report.html")
     
         logger.info("Sending Slack message...")
         messenger = SlackMessenger(all_env_data)
@@ -1377,6 +1560,7 @@ data:
         slack_api_key = secrets["daily-monitoring-us-east-2"].get("SLACK_API_KEY")
     
         send_slack_message(messenger.message_blocks, config.output_channel_id, slack_api_key)
+        send_slack_file("./daily_report.html", config.output_channel_id, slack_api_key)
         logger.info("Slack message sent successfully.")
         logger.info("Job execution completed, shutting down...")
 
@@ -1408,3 +1592,4 @@ data:
     
     if __name__ == "__main__":
         sys.exit(main())
+

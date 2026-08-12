@@ -250,15 +250,39 @@ QUERIES = [
     }
   },
   {
+      "name": "USDA",
+      "DD_URL": "ddog-gov.com",
+      "API_KEY": "FEDHIVE_USDA_API_KEY",
+      "APP_KEY": "FEDHIVE_USDA_APP_KEY",
+      "queries": {
+        "504": {
+          "type": "aggregate",
+          "query": "env:usda status:error @http.status_code:504",
+          "red_threshold": 1
+        },
+        "502": {
+          "type": "aggregate",
+          "query": "env:usda status:error @http.status_code:502",
+          "red_threshold": 1
+        },
+        "503": {
+          "type": "aggregate",
+          "query": "env:usda status:error @http.status_code:503",
+          "red_threshold": 1,
+          "manual_threshold": 1
+        },
+        "oom": {
+          "type": "event",
+          "query": "env:usda status:error (OutOfMemoryError OR \"out of memory\" OR OOM)",
+          "red_threshold": 1
+        }
+      }
+  },
+  {
     "name": "Other Synthetic Tests",
     "API_KEY": "DD_ULP_API_KEY",
     "APP_KEY": "DD_ULP_APP_KEY",
     "queries": {
-      "core.allocore.com": {
-        "type": "synthetic",
-        "query": "bsi-2qz-vvt",
-        "red_threshold": 1
-      }
     }
   }
 ]

@@ -142,6 +142,9 @@ def main(argv: list[str] | None = None) -> int:
     if args.out:
         Path(args.out).write_text(out, encoding="utf-8")
     else:
+        # Scripts may contain non-cp1252 characters (e.g. emoji in report templates),
+        # so force UTF-8 on stdout rather than inheriting the Windows console codepage.
+        sys.stdout.reconfigure(encoding="utf-8", newline="\n")
         print(out)
 
     return 0

@@ -27,9 +27,9 @@ logger = logging.getLogger(__name__)
 
 DATADOG_URL = "datadoghq.com"
 
-def get_dd_config(api_key: str, app_key: str) -> Configuration:
+def get_dd_config(api_key: str, app_key: str, site: str = DATADOG_URL) -> Configuration:
     ddconfig = Configuration()
-    ddconfig.server_variables["site"] = DATADOG_URL
+    ddconfig.server_variables["site"] = site
     
     secret_name = os.getenv("SECRET_NAME")
     region_name = os.getenv("AWS_REGION")

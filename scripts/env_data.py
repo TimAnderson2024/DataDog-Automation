@@ -82,7 +82,7 @@ class EnvData:
 
         try:
             self.dd_config = q.get_dd_config(
-                json_config["API_KEY"], json_config["APP_KEY"]
+                json_config["API_KEY"], json_config["APP_KEY"], json_config.get("DD_URL", q.DATADOG_URL)
             )
         except Exception as e:
             print(
