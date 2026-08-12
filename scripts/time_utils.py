@@ -55,6 +55,11 @@ def _is_eastern_dst(utc_dt: datetime) -> bool:
     # If DST window crosses year boundary (it doesn't for US rules), handle normally
     return start_utc <= utc_dt < end_utc
 
+def eastern_now() -> datetime:
+    utc_naive = datetime.utcnow()
+    offset = timedelta(hours=-4 if _is_eastern_dst(utc_naive) else -5)
+    return datetime.now(timezone(offset))
+
 def unix_to_iso(unix_time: int | float) -> str:
     unix_time = float(unix_time)
     if unix_time > 1_000_000_000_000:

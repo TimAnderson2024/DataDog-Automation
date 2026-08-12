@@ -1,5 +1,6 @@
 from env_data import EnvData, Result
 from datetime import date
+from time_utils import eastern_now
 
 class SlackMessenger:
     data: dict[EnvData]
@@ -11,8 +12,8 @@ class SlackMessenger:
         self.data = all_env_data
         self.message_blocks = []
     
-    def build_message(self):
-        self.build_header()
+    def build_message(self, time_period: str):
+        self.build_header(time_period)
 
         # Split up envs by alert level
         alert_envs = {"green": [], "yellow": [], "red": []}
@@ -28,7 +29,7 @@ class SlackMessenger:
         self.build_summary()
         self.build_env_breakdowns(alert_envs)
     
-    def build_header(self):
+    def build_header(self, time_period: str):
         header_blocks = []
 
         header_blocks.append(
@@ -36,7 +37,7 @@ class SlackMessenger:
                 "type": "header",
                 "text": {
                     "type": "plain_text",
-                    "text": f"📊 ENV Health Status — {date.today().strftime('%Y-%m-%d')}",
+                    "text": f"📊 ENV Health Status — {eastern_now().strftime('%Y-%m-%d, %H:%M')}-({time_period})",
                 },
             }
         )

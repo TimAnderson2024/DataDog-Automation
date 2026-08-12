@@ -291,35 +291,13 @@
   ============================================================ -->
   <script>
   const REPORT_DATA = {
-  "date": "2026-08-11",
-  "time": "17:09",
+  "date": "2026-08-12",
+  "time": "14:18",
   "environments": [
     {
       "name": "ULP",
-      "e504": 34,
-      "e502": 4,
-      "e503": 0,
-      "oom": 1,
-      "levels": {
-        "e504": "ok",
-        "e502": "moderate",
-        "e503": "ok",
-        "oom": "warning",
-        "filemover": "moderate",
-        "synthetic": "ok"
-      },
-      "filemover_failures": [
-        {
-          "job": "stgwe-etran-django-grp-2",
-          "count": 1
-        }
-      ],
-      "synthetic": null
-    },
-    {
-      "name": "CLS",
-      "e504": 0,
-      "e502": 6,
+      "e504": 19,
+      "e502": 14,
       "e503": 0,
       "oom": 2,
       "levels": {
@@ -334,16 +312,33 @@
       "synthetic": null
     },
     {
-      "name": "LOS",
-      "e504": 25,
-      "e502": 8,
+      "name": "CLS",
+      "e504": 0,
+      "e502": 0,
       "e503": 0,
-      "oom": 3,
+      "oom": 0,
       "levels": {
-        "e504": "warning",
-        "e502": "warning",
+        "e504": "ok",
+        "e502": "ok",
         "e503": "ok",
-        "oom": "warning",
+        "oom": "ok",
+        "filemover": "ok",
+        "synthetic": "ok"
+      },
+      "filemover_failures": [],
+      "synthetic": null
+    },
+    {
+      "name": "LOS",
+      "e504": 1,
+      "e502": 3,
+      "e503": 0,
+      "oom": 0,
+      "levels": {
+        "e504": "moderate",
+        "e502": "moderate",
+        "e503": "ok",
+        "oom": "ok",
         "filemover": "ok",
         "synthetic": "ok"
       },
@@ -353,12 +348,12 @@
     {
       "name": "URIF",
       "e504": 0,
-      "e502": 1,
+      "e502": 0,
       "e503": 0,
       "oom": 0,
       "levels": {
         "e504": "ok",
-        "e502": "warning",
+        "e502": "ok",
         "e503": "ok",
         "oom": "ok",
         "filemover": "ok",
@@ -804,35 +799,13 @@ def write_report(today_data: dict, history: list, output_path: str = "daily_repo
     html = re.sub(
         r'const REPORT_DATA = \{.*?\};',
         f'const REPORT_DATA = {
-  "date": "2026-08-11",
-  "time": "17:09",
+  "date": "2026-08-12",
+  "time": "14:18",
   "environments": [
     {
       "name": "ULP",
-      "e504": 34,
-      "e502": 4,
-      "e503": 0,
-      "oom": 1,
-      "levels": {
-        "e504": "ok",
-        "e502": "moderate",
-        "e503": "ok",
-        "oom": "warning",
-        "filemover": "moderate",
-        "synthetic": "ok"
-      },
-      "filemover_failures": [
-        {
-          "job": "stgwe-etran-django-grp-2",
-          "count": 1
-        }
-      ],
-      "synthetic": null
-    },
-    {
-      "name": "CLS",
-      "e504": 0,
-      "e502": 6,
+      "e504": 19,
+      "e502": 14,
       "e503": 0,
       "oom": 2,
       "levels": {
@@ -847,16 +820,33 @@ def write_report(today_data: dict, history: list, output_path: str = "daily_repo
       "synthetic": null
     },
     {
-      "name": "LOS",
-      "e504": 25,
-      "e502": 8,
+      "name": "CLS",
+      "e504": 0,
+      "e502": 0,
       "e503": 0,
-      "oom": 3,
+      "oom": 0,
       "levels": {
-        "e504": "warning",
-        "e502": "warning",
+        "e504": "ok",
+        "e502": "ok",
         "e503": "ok",
-        "oom": "warning",
+        "oom": "ok",
+        "filemover": "ok",
+        "synthetic": "ok"
+      },
+      "filemover_failures": [],
+      "synthetic": null
+    },
+    {
+      "name": "LOS",
+      "e504": 1,
+      "e502": 3,
+      "e503": 0,
+      "oom": 0,
+      "levels": {
+        "e504": "moderate",
+        "e502": "moderate",
+        "e503": "ok",
+        "oom": "ok",
         "filemover": "ok",
         "synthetic": "ok"
       },
@@ -866,12 +856,12 @@ def write_report(today_data: dict, history: list, output_path: str = "daily_repo
     {
       "name": "URIF",
       "e504": 0,
-      "e502": 1,
+      "e502": 0,
       "e503": 0,
       "oom": 0,
       "levels": {
         "e504": "ok",
-        "e502": "warning",
+        "e502": "ok",
         "e503": "ok",
         "oom": "ok",
         "filemover": "ok",

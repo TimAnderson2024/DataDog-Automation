@@ -5,9 +5,9 @@ import boto3
 from jinja2 import Environment
 
 from datetime import date, datetime
-from env_data import EnvData, EnvData, EnvDataFactory, Result
-from app_config import AppConfig
+from env_data import EnvData, EnvDataFactory, Result
 from slack_messenger import SlackMessenger
+from app_config import AppConfig
 from external_helpers import get_aws_secrets_helper, send_slack_message, send_slack_file
 
 logger = logging.getLogger(__name__)
@@ -315,11 +315,17 @@ def build_report(config: AppConfig, all_env_data: list[EnvData]) -> str:
     
     return str(output_path)
 
-import json, re
+import json, re, tempfile
 from pathlib import Path
 from datetime import date
 
-def build_visual_report(today_data: dict, history: list, output_path: str = "daily_report.html", template_path: str = "visual-report-template.html"):
+# Absolute paths: the job runs as `python /tmp/scripts/main.py`, so the cwd is the
+# image WORKDIR, not the script dir. /tmp is the writable `workdir` emptyDir;
+# gettempdir() resolves to it in-cluster and to %TEMP% on a Windows dev box.
+REPORT_PATH = str(Path(tempfile.gettempdir()) / "daily_report.html")
+TEMPLATE_PATH = Path(__file__).resolve().parent / "visual-report-template.html"
+
+def build_visual_report(today_data: dict, history: list, output_path: str = REPORT_PATH, template_path: str | Path = TEMPLATE_PATH):
     """
     Inject live data into the report template.
 
@@ -359,13 +365,15 @@ def build_visual_report(today_data: dict, history: list, output_path: str = "dai
     payload = {**today_data, "history": history}
     json_str = json.dumps(payload, indent=2)
 
-    html = Path(template_path).read_text(encoding="utf-8")
+    template = Path(template_path) if template_path else Path(__file__).resolve().parent / "visual-report-template.html"
+    html = template.read_text(encoding="utf-8")
     html = re.sub(
         r'const REPORT_DATA = \{.*?\};',
         f'const REPORT_DATA = {json_str};',
         html,
         flags=re.DOTALL
     )
+    Path(output_path).parent.mkdir(parents=True, exist_ok=True)
     Path(output_path).write_text(html, encoding="utf-8")
   
 def upload_report_to_s3(config: AppConfig, report_path: str) -> None:
@@ -449,20 +457,20 @@ def run_job(config: AppConfig) -> None:
             ]
         },
         history=[],
-        output_path="daily_report.html"
+        output_path=REPORT_PATH
     )
 
-    upload_report_to_s3(config, "./daily_report.html")
+    upload_report_to_s3(config, REPORT_PATH)
 
     logger.info("Sending Slack message...")
     messenger = SlackMessenger(all_env_data)
-    messenger.build_message()
+    messenger.build_message(config.time_range)
     secret_name = os.getenv("SECRET_NAME")
     region_name = os.getenv("AWS_REGION")
     secrets = get_aws_secrets_helper([secret_name], region_name)
     slack_api_key = secrets["daily-monitoring-us-east-2"].get("SLACK_API_KEY")
 
     send_slack_message(messenger.message_blocks, config.output_channel_id, slack_api_key)
-    send_slack_file("./daily_report.html", config.output_channel_id, slack_api_key)
+    send_slack_file(REPORT_PATH, config.output_channel_id, slack_api_key)
     logger.info("Slack message sent successfully.")
     logger.info("Job execution completed, shutting down...")
