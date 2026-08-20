@@ -195,6 +195,10 @@
   .row-tag.moderate { background: var(--amber-light); color: var(--amber); border-color: #f5c97a; }
   .env-divider { border: none; border-top: 0.5px solid var(--border); margin: 7px 0; }
   .metric-sub { font-size: 10px; color: var(--text-muted); font-family: var(--font-mono); margin-top: 4px; }
+  .oom-breakdown { margin: 2px 0 4px 0; padding-left: 10px; border-left: 2px solid var(--border); }
+  .oom-svc-row { display: flex; justify-content: space-between; align-items: center; padding: 1px 0; }
+  .oom-svc-name { font-family: var(--font-mono); font-size: 10px; color: var(--text-muted); }
+  .oom-svc-count { font-family: var(--font-mono); font-size: 10px; font-weight: 500; color: var(--text-secondary); }
 
   /* Filemover */
   .filemover-section {
@@ -534,13 +538,24 @@
         <span class="metric-right">${tag}<span class="metric-val ${valClass}">${display}</span></span>
       </div>`;
     }
+    
+    function oomBreakdown(env) {
+      const services = env.oom_by_service || [];
+      if (services.length === 0) return '';
+      const svcRows = services.map(s =>
+        `<div class="oom-svc-row"><span class="oom-svc-name">${s.service}</span><span class="oom-svc-count">${s.count}</span></div>`
+      ).join('');
+      return `<div class="oom-breakdown">${svcRows}</div>`;
+    }
 
     function envCard(env) {
       const sev = severity(env);
       const cardClass = sev === 'warning' ? 'has-warning' : sev === 'moderate' ? 'has-moderate' : 'all-clear';
       const rows = METRIC_DEFS.map(def => {
         const n = env[def.key] || 0;
-        return metricRow(def.label, n, levelOf(env, def.key));
+        let row = metricRow(def.label, n, levelOf(env, def.key));
+        if (def.key === 'oom') row += oomBreakdown(env);
+        return row;
       }).join('');
 
       const fm = fmTotal(env);
@@ -707,74 +722,3 @@
 </div>
 </body>
 </html>
-
-<!--
-=================================================================
-PYTHON HELPER — copy into your datadog script
-=================================================================
-
-import json, re
-from pathlib import Path
-from datetime import date
-
-def write_report(today_data: dict, history: list, output_path: str = "daily_report.html"):
-    """
-    Inject live data into the report template.
-
-    today_data format:
-    {
-        "date": "2026-05-20",          # ISO date string
-        "time": "07:00",               # HH:MM string
-        "environments": [
-            {
-                "name": "ULP",
-                "e504": 153,
-                "e502": 202,
-                "e503": 8,
-                "oom": 5,
-                "filemover_failures": [    # empty list if none
-                    {"job": "stgwe-etran-oracle-sync-run", "count": 3}
-                ],
-                "synthetic": None          # or {"name": "urifinvest", "errors": 0}
-            },
-            ...
-        ]
-    }
-
-    history format: list of dicts (oldest first, NOT including today):
-    [
-        {
-            "date": "2026-05-16",
-            "environments": {
-                "ULP":  {"e504": 80, "e502": 120, "e503": 4, "oom": 2},
-                "URIF": {"e504": 2,  "e502": 12,  "e503": 0, "oom": 1},
-                ...
-            }
-        },
-        ...
-    ]
-    """
-    payload = {**today_data, "history": history}
-    json_str = json.dumps(payload, indent=2)
-
-    html = Path(output_path).read_text(encoding="utf-8")
-    html = re.sub(
-        r'const REPORT_DATA = \{.*?\};',
-        f'const REPORT_DATA = {json_str};',
-        html,
-        flags=re.DOTALL
-    )
-    Path(output_path).write_text(html, encoding="utf-8")
-    print(f"Report written to {output_path}")
-
-
-# --- Example usage ---
-# today = {
-#     "date": str(date.today()),
-#     "time": "07:00",
-#     "environments": [ ... ]  # built from your datadog API calls
-# }
-# history = load_history_from_db_or_file()  # your existing store
-# write_report(today, history, "daily_report.html")
-=================================================================
--->

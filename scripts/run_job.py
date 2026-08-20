@@ -299,6 +299,26 @@ def identify_unique_filemover_jobs(log_results: dict[str, Result]) -> dict[str, 
 
     return unique_jobs
 
+def aggregate_oom_by_service(oom_result: Result) -> dict[str, int]:
+  """Break OOM events down by their `service` trait, sorted by count desc."""
+  by_service: dict[str, int] = {}
+
+  for event in oom_result.raw:
+      attributes = event['attributes']
+      service = attributes.get('service')
+      if not service:
+          nested = attributes.get('attributes') or {}
+          service = nested.get('service')
+      if not service:
+          for tag in attributes.get('tags') or []:
+              if tag.startswith('service:'):
+                  service = tag.split('service:', 1)[1]
+                  break
+      service = service or 'unknown'
+      by_service[service] = by_service.get(service, 0) + 1
+
+  return dict(sorted(by_service.items(), key=lambda kv: kv[1], reverse=True))
+
 def build_report(config: AppConfig, all_env_data: list[EnvData]) -> str:
     jinja_env = Environment(variable_start_string='[[', variable_end_string=']]', keep_trailing_newline=True)
     template = jinja_env.from_string(JINJA_TEMPLATE)
@@ -342,6 +362,10 @@ def build_visual_report(today_data: dict, history: list, output_path: str = REPO
                 "oom": 5,
                 "filemover_failures": [    # empty list if none
                     {"job": "stgwe-etran-oracle-sync-run", "count": 3}
+                ],
+                "oom_by_service": [        # empty list if none; breaks down the oom total by service
+                    {"service": "etran-api", "count": 3},
+                    {"service": "elv-worker", "count": 2}
                 ],
                 "synthetic": None          # or {"name": "urifinvest", "errors": 0}
             },
@@ -395,6 +419,7 @@ def run_job(config: AppConfig) -> None:
 
     logger.info("Identifying unique filemover failures...")
     for env in all_env_data:
+        print(env.event_results.get("oom").raw if env.event_results.get("oom") else "No OOM results")
         if env.log_results.get('failed_fm_jobs') and len(env.log_results['failed_fm_jobs'].raw) > 0:
             env.filtered_fm_jobs = identify_unique_filemover_jobs(env.log_results.get('failed_fm_jobs', {}))
             logger.info(
@@ -407,6 +432,18 @@ def run_job(config: AppConfig) -> None:
             env.filtered_fm_jobs = {}
             logger.info("No filemover failures found in %s", env.env)
 
+        oom_result = env.event_results.get("oom")
+        if oom_result:
+            env.oom_by_service = aggregate_oom_by_service(oom_result)
+            logger.info(
+              "OOM event results for %s: aggregate=%d by_service=%s",
+              env.env,
+              oom_result.aggregate,
+              env.oom_by_service
+            )
+        else:
+            env.oom_by_service = {}
+          
     logger.info("Building report...")
     # report_path = build_report(config, all_env_data)
     # logger.info(f"Report built successfully. Attempting to upload to S3...")
@@ -451,6 +488,7 @@ def run_job(config: AppConfig) -> None:
                         "synthetic": _synthetic_level(env),
                     },
                     "filemover_failures": [{"job": job, "count": count} for job, count in env.filtered_fm_jobs.items()],
+                    "oom_by_service": [{"service": service, "count": count} for service, count in env.oom_by_service.items()],
                     "synthetic": _first_synthetic(env),
                 }
                 for env in all_env_data

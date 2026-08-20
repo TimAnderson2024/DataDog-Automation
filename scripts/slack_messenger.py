@@ -149,6 +149,22 @@ class SlackMessenger:
             ],
         }
 
+    def build_oom_context(self, env) -> dict | None:
+        oom_by_service = getattr(env, "oom_by_service", {}) or {}
+        if not oom_by_service:
+            return None
+
+        oom_parts = [f"`{service}` ({count})" for service, count in oom_by_service.items()]
+        return {
+            "type": "context",
+            "elements": [
+                {
+                    "type": "mrkdwn",
+                    "text": "*OOM by service:* " + ", ".join(oom_parts),
+                }
+            ],
+        }
+
     def build_env_breakdowns(self, alert_envs: dict[str, list[EnvData]]) -> list[dict]:
         error_envs = [env for env in self.data if not env.no_errors]
 
@@ -163,6 +179,9 @@ class SlackMessenger:
             }
 
             self.message_blocks.append(env_block)
+            oom_context = self.build_oom_context(env)
+            if oom_context:
+                self.message_blocks.append(oom_context)
             fm_context = self.build_filemover_context(env)
             if fm_context:
                 self.message_blocks.append(fm_context)
