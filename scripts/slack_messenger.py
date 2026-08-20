@@ -1,5 +1,5 @@
 from env_data import EnvData, Result
-from time_utils import eastern_now
+from time_utils import time_range_label
 
 class SlackMessenger:
     data: dict[EnvData]
@@ -36,7 +36,7 @@ class SlackMessenger:
                 "type": "header",
                 "text": {
                     "type": "plain_text",
-                    "text": f"📊 ENV Health Status — {eastern_now().strftime('%Y-%m-%d, %H:%M')} - {time_period}",
+                    "text": f"📊 ENV Health Status — {time_range_label(time_period)}",
                 },
             }
         )

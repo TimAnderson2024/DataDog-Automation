@@ -98,6 +98,38 @@ _UNIT_MS = {
 
 _NOW_RE = re.compile(r"^now(?:-(\d+)([smhdw]))?$")
 
+_PERIOD_RE = re.compile(r"^(\d+)([smhdw])$")
+
+def period_to_timedelta(period: str) -> timedelta:
+    """
+    Convert a period string like '9h' or '24h' to a timedelta.
+    """
+    m = _PERIOD_RE.match(period.strip())
+    if not m:
+        raise ValueError(f"Unsupported period format: {period!r} (expected '<N><unit>')")
+    qty, unit = m.groups()
+    return timedelta(milliseconds=int(qty) * _UNIT_MS[unit])
+
+def time_range_label(period: str, time_to: datetime | None = None) -> str:
+    """
+    Label for the range covered by 'period', ending at 'time_to' (default: now Eastern).
+    Dates are qualified per side only when the range crosses midnight.
+    e.g. '9h' at 16:30 -> '2026-08-12, 7:30 - 16:30, 9h'
+         '24h' at 8:05 -> '2026-08-11 8:05 - 2026-08-12 8:05, 24h'
+    """
+    time_to = time_to or eastern_now()
+    time_from = time_to - period_to_timedelta(period)
+
+    def hhmm(dt: datetime) -> str:
+        return f"{dt.hour}:{dt.minute:02d}"
+
+    if time_from.date() == time_to.date():
+        return f"{time_to:%Y-%m-%d}, {hhmm(time_from)} - {hhmm(time_to)}, {period}"
+    return (
+        f"{time_from:%Y-%m-%d} {hhmm(time_from)} - "
+        f"{time_to:%Y-%m-%d} {hhmm(time_to)}, {period}"
+    )
+
 def _to_unix_ms(t: str, now_ms: int) -> int:
     """
     Convert 'now' or 'now-<N><unit>' to unix ms.

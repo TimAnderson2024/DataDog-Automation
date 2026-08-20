@@ -8,31 +8,6 @@ metadata:
     env: {{ required "value expected" .Values.env }}
 
 data:
-  app_config.py: |-
-    from pathlib import Path
-    
-    class AppConfig:
-        time_from: str
-        time_to: str
-        query_path: Path
-        output_path: Path
-        template_path: Path
-        output_channel_id: str
-        s3_bucket: str
-        s3_key_prefix: str
-    
-        def __init__(self):
-            self.time_from = "now-8h"
-            self.time_to = "now"
-            self.output_path = Path("output")
-            self.query_path = Path("queries.json")
-            self.template_path = Path("slack_template.md")
-            self.output_channel_id = "C07050LEJA3"
-            # Live channel: "C07050LEJA3"
-            # Test channel: "C0ALY9QJ30T"
-            # self.output_channel_id = "{{ .Values.dailyMonitoring.slackChannelId }}"
-            self.s3_bucket = "stgcore-daily-monitoring-base-us-east-2"
-
   external_helpers.py: |-
     import json
     import base64
@@ -460,6 +435,11 @@ data:
         # If DST window crosses year boundary (it doesn't for US rules), handle normally
         return start_utc <= utc_dt < end_utc
     
+    def eastern_now() -> datetime:
+        utc_naive = datetime.utcnow()
+        offset = timedelta(hours=-4 if _is_eastern_dst(utc_naive) else -5)
+        return datetime.now(timezone(offset))
+    
     def unix_to_iso(unix_time: int | float) -> str:
         unix_time = float(unix_time)
         if unix_time > 1_000_000_000_000:
@@ -497,6 +477,38 @@ data:
     }
     
     _NOW_RE = re.compile(r"^now(?:-(\d+)([smhdw]))?$")
+    
+    _PERIOD_RE = re.compile(r"^(\d+)([smhdw])$")
+    
+    def period_to_timedelta(period: str) -> timedelta:
+        """
+        Convert a period string like '9h' or '24h' to a timedelta.
+        """
+        m = _PERIOD_RE.match(period.strip())
+        if not m:
+            raise ValueError(f"Unsupported period format: {period!r} (expected '<N><unit>')")
+        qty, unit = m.groups()
+        return timedelta(milliseconds=int(qty) * _UNIT_MS[unit])
+    
+    def time_range_label(period: str, time_to: datetime | None = None) -> str:
+        """
+        Label for the range covered by 'period', ending at 'time_to' (default: now Eastern).
+        Dates are qualified per side only when the range crosses midnight.
+        e.g. '9h' at 16:30 -> '2026-08-12, 7:30 - 16:30, 9h'
+             '24h' at 8:05 -> '2026-08-11 8:05 - 2026-08-12 8:05, 24h'
+        """
+        time_to = time_to or eastern_now()
+        time_from = time_to - period_to_timedelta(period)
+    
+        def hhmm(dt: datetime) -> str:
+            return f"{dt.hour}:{dt.minute:02d}"
+    
+        if time_from.date() == time_to.date():
+            return f"{time_to:%Y-%m-%d}, {hhmm(time_from)} - {hhmm(time_to)}, {period}"
+        return (
+            f"{time_from:%Y-%m-%d} {hhmm(time_from)} - "
+            f"{time_to:%Y-%m-%d} {hhmm(time_to)}, {period}"
+        )
     
     def _to_unix_ms(t: str, now_ms: int) -> int:
         """
@@ -538,6 +550,41 @@ data:
     
         return business, weekends
 
+  app_config.py: |-
+    from pathlib import Path
+    from time_utils import eastern_now
+    
+    # noon boundary tolerates retries/delays
+    RUN_SLOT = "am" if eastern_now().hour < 12 else "pm"  
+    
+    class AppConfig:
+        time_from: str
+        time_to: str
+        query_path: Path
+        output_path: Path
+        template_path: Path
+        output_channel_id: str
+        s3_bucket: str
+        s3_key_prefix: str
+    
+        def __init__(self):
+            if RUN_SLOT == "am":
+                self.time_range = "24h"
+                self.time_from = "now-24h"
+            else:
+                self.time_range = "9h"
+                self.time_from = "now-9h"
+    
+            self.time_to = "now"
+            self.output_path = Path("output")
+            self.query_path = Path("queries.json")
+            self.template_path = Path("slack_template.md")
+            self.output_channel_id = "C07050LEJA3"
+            # Live channel: "C07050LEJA3"
+            # Test channel: "C0ALY9QJ30T"
+            # self.output_channel_id = "{{ .Values.dailyMonitoring.slackChannelId }}"
+            self.s3_bucket = "stgcore-daily-monitoring-base-us-east-2"
+
   query.py: |-
     import os
     import logging
@@ -567,7 +614,6 @@ data:
     logger = logging.getLogger(__name__)
     
     DATADOG_URL = "datadoghq.com"
-    FED_DATADOG_URL = "ddog-gov.com"
     
     def get_dd_config(api_key: str, app_key: str, site: str = DATADOG_URL) -> Configuration:
         ddconfig = Configuration()
@@ -925,7 +971,7 @@ data:
 
   slack_messenger.py: |-
     from env_data import EnvData, Result
-    from datetime import date
+    from time_utils import time_range_label
     
     class SlackMessenger:
         data: dict[EnvData]
@@ -937,8 +983,8 @@ data:
             self.data = all_env_data
             self.message_blocks = []
         
-        def build_message(self):
-            self.build_header()
+        def build_message(self, time_period: str):
+            self.build_header(time_period)
     
             # Split up envs by alert level
             alert_envs = {"green": [], "yellow": [], "red": []}
@@ -954,7 +1000,7 @@ data:
             self.build_summary()
             self.build_env_breakdowns(alert_envs)
         
-        def build_header(self):
+        def build_header(self, time_period: str):
             header_blocks = []
     
             header_blocks.append(
@@ -962,7 +1008,7 @@ data:
                     "type": "header",
                     "text": {
                         "type": "plain_text",
-                        "text": f"📊 ENV Health Status — {date.today().strftime('%Y-%m-%d')}",
+                        "text": f"📊 ENV Health Status — {time_range_label(time_period)}",
                     },
                 }
             )
@@ -1102,9 +1148,9 @@ data:
     from jinja2 import Environment
     
     from datetime import date, datetime
-    from env_data import EnvData, EnvData, EnvDataFactory, Result
-    from app_config import AppConfig
+    from env_data import EnvData, EnvDataFactory, Result
     from slack_messenger import SlackMessenger
+    from app_config import AppConfig
     from external_helpers import get_aws_secrets_helper, send_slack_message, send_slack_file
     
     logger = logging.getLogger(__name__)
@@ -1412,11 +1458,17 @@ data:
         
         return str(output_path)
     
-    import json, re
+    import json, re, tempfile
     from pathlib import Path
     from datetime import date
     
-    def build_visual_report(today_data: dict, history: list, output_path: str = "daily_report.html", template_path: str = "visual-report-template.html"):
+    # Absolute paths: the job runs as `python /tmp/scripts/main.py`, so the cwd is the
+    # image WORKDIR, not the script dir. /tmp is the writable `workdir` emptyDir;
+    # gettempdir() resolves to it in-cluster and to %TEMP% on a Windows dev box.
+    REPORT_PATH = str(Path(tempfile.gettempdir()) / "daily_report.html")
+    TEMPLATE_PATH = Path(__file__).resolve().parent / "visual-report-template.html"
+    
+    def build_visual_report(today_data: dict, history: list, output_path: str = REPORT_PATH, template_path: str | Path = TEMPLATE_PATH):
         """
         Inject live data into the report template.
     
@@ -1456,13 +1508,15 @@ data:
         payload = {**today_data, "history": history}
         json_str = json.dumps(payload, indent=2)
     
-        html = Path(template_path).read_text(encoding="utf-8")
+        template = Path(template_path) if template_path else Path(__file__).resolve().parent / "visual-report-template.html"
+        html = template.read_text(encoding="utf-8")
         html = re.sub(
             r'const REPORT_DATA = \{.*?\};',
             f'const REPORT_DATA = {json_str};',
             html,
             flags=re.DOTALL
         )
+        Path(output_path).parent.mkdir(parents=True, exist_ok=True)
         Path(output_path).write_text(html, encoding="utf-8")
       
     def upload_report_to_s3(config: AppConfig, report_path: str) -> None:
@@ -1546,21 +1600,21 @@ data:
                 ]
             },
             history=[],
-            output_path="daily_report.html"
+            output_path=REPORT_PATH
         )
     
-        upload_report_to_s3(config, "./daily_report.html")
+        upload_report_to_s3(config, REPORT_PATH)
     
         logger.info("Sending Slack message...")
         messenger = SlackMessenger(all_env_data)
-        messenger.build_message()
+        messenger.build_message(config.time_range)
         secret_name = os.getenv("SECRET_NAME")
         region_name = os.getenv("AWS_REGION")
         secrets = get_aws_secrets_helper([secret_name], region_name)
         slack_api_key = secrets["daily-monitoring-us-east-2"].get("SLACK_API_KEY")
     
         send_slack_message(messenger.message_blocks, config.output_channel_id, slack_api_key)
-        send_slack_file("./daily_report.html", config.output_channel_id, slack_api_key)
+        send_slack_file(REPORT_PATH, config.output_channel_id, slack_api_key)
         logger.info("Slack message sent successfully.")
         logger.info("Job execution completed, shutting down...")
 
