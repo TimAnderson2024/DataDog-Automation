@@ -216,7 +216,7 @@ QUERIES = [
       },
       "usalending": {
         "type": "synthetic",
-        "query": "fnp-uqa-mx7",
+        "query": "qzp-2p7-6ut",
         "red_threshold": 1
       }
     }
