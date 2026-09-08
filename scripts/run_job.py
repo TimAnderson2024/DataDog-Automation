@@ -298,13 +298,27 @@ def identify_unique_filemover_jobs(log_results: dict[str, Result]) -> dict[str, 
         unique_jobs[job_name] = unique_jobs.get(job_name, 0) + 1
 
     return unique_jobs
+  
+def filter_duplicate_oom(oom_results: dict[str, int]) -> dict[str, int]:
+    print(oom_results)
 
-def aggregate_oom_by_service(oom_result: Result) -> dict[str, int]:
-  """Break OOM events down by their `service` trait, sorted by count desc."""
-  by_service: dict[str, int] = {}
+def _to_epoch_ms(value) -> int:
+  """Convert a Datadog timestamp (datetime or numeric/string epoch) to epoch milliseconds."""
+  if isinstance(value, datetime):
+    return int(value.timestamp() * 1000)
+  return int(value)
 
+def filter_and_aggregate_oom(oom_result: Result) -> dict[str, int]:
+  """Break OOM events down by their `service` trait, sorted by count desc.
+
+  Events with the same message within a 5-second window of an already-kept
+  event for that service are treated as duplicates and not counted.
+  """
+  by_service: dict[str, list[dict]] = {}
   for event in oom_result.raw:
       attributes = event['attributes']
+
+      # Get the service tag
       service = attributes.get('service')
       if not service:
           nested = attributes.get('attributes') or {}
@@ -314,10 +328,25 @@ def aggregate_oom_by_service(oom_result: Result) -> dict[str, int]:
               if tag.startswith('service:'):
                   service = tag.split('service:', 1)[1]
                   break
-      service = service or 'unknown'
-      by_service[service] = by_service.get(service, 0) + 1
 
-  return dict(sorted(by_service.items(), key=lambda kv: kv[1], reverse=True))
+      service = service or 'unknown'
+
+      kept_events = by_service.setdefault(service, [])
+      new_timestamp = _to_epoch_ms(attributes.get('timestamp'))
+      new_msg = attributes.get('message')
+
+      # Is duplicate if an existing event for the same service has the same message within a 5-second window
+      is_duplicate = any(
+          existing['attributes'].get('message') == new_msg
+          and abs(_to_epoch_ms(existing['attributes'].get('timestamp')) - new_timestamp) < 5000
+          for existing in kept_events
+      )
+      if not is_duplicate:
+          kept_events.append(event)
+
+  by_service_counts = {service: len(events) for service, events in by_service.items()}
+
+  return dict(sorted(by_service_counts.items(), key=lambda kv: kv[1], reverse=True))
 
 def build_report(config: AppConfig, all_env_data: list[EnvData]) -> str:
     jinja_env = Environment(variable_start_string='[[', variable_end_string=']]', keep_trailing_newline=True)
@@ -419,7 +448,6 @@ def run_job(config: AppConfig) -> None:
 
     logger.info("Identifying unique filemover failures...")
     for env in all_env_data:
-        print(env.event_results.get("oom").raw if env.event_results.get("oom") else "No OOM results")
         if env.log_results.get('failed_fm_jobs') and len(env.log_results['failed_fm_jobs'].raw) > 0:
             env.filtered_fm_jobs = identify_unique_filemover_jobs(env.log_results.get('failed_fm_jobs', {}))
             logger.info(
@@ -434,7 +462,9 @@ def run_job(config: AppConfig) -> None:
 
         oom_result = env.event_results.get("oom")
         if oom_result:
-            env.oom_by_service = aggregate_oom_by_service(oom_result)
+            env.oom_by_service = filter_and_aggregate_oom(oom_result)
+            oom_result.aggregate = sum(env.oom_by_service.values())
+            
             logger.info(
               "OOM event results for %s: aggregate=%d by_service=%s",
               env.env,

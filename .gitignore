@@ -4,3 +4,4 @@ output/*
 .env
 .vscode/launch.json
 .venv
+tmp
