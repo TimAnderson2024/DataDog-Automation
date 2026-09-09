@@ -172,7 +172,7 @@ class SlackMessenger:
             ],
         }
 
-    def build_env_breakdowns(self, alert_envs: dict[str, list[EnvData]]) -> list[dict]:
+    def build_env_breakdowns(self, alert_envs: dict[str, list[EnvData]]) -> list[dict]:                
         error_envs = [env for env in self.data if not env.no_errors]
 
         for env in error_envs:
@@ -193,3 +193,15 @@ class SlackMessenger:
             if fm_context:
                 self.message_blocks.append(fm_context)
             self.message_blocks.append({"type": "divider"})      
+        
+        self.message_blocks.append(
+            {
+                "type": "context",
+                "elements": [
+                    {
+                        "type": "plain_text",
+                        "text": "Breakdown includes top 5 paths, excluding single occurrences",
+                    }
+                ],
+            }
+        )
