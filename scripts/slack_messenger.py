@@ -119,12 +119,14 @@ class SlackMessenger:
             err_text = err_text + f"*{self.get_status_icon(result)} {err}:* {result.aggregate} \n"
             if err in ["504", "502"]:
                 for path in result.sorted[:5]:
-                    err_text = err_text + f"\t\t• {path['count']}: `{path['path']}`\n"
+                    if path['count'] > 1:
+                        err_text = err_text + f"\t\t• {path['count']}: `{path['path']}`\n"
         if all_results.get("503").aggregate > 0:
             result = all_results.get("503")
             err_text = err_text + f"*{self.get_status_icon(result)} 503:* {result.aggregate} \n"
             for path in result.sorted[:5]:
-                err_text = err_text + f"\t\t• {path['count']}: `{path['path']}`\n"
+                if path['count'] > 1:
+                    err_text = err_text + f"\t\t• {path['count']}: `{path['path']}`\n"
         env_blocks.append({"type": "section", "text": {"type": "mrkdwn", "text": err_text}})
 
         synthetic_results = env.synthetic_results
