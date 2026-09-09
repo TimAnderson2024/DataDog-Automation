@@ -200,7 +200,7 @@ class SlackMessenger:
                 "elements": [
                     {
                         "type": "plain_text",
-                        "text": "Breakdown includes top 5 paths, excluding single occurrences",
+                        "text": "Breakdown includes top five paths, excluding single occurrences",
                     }
                 ],
             }
