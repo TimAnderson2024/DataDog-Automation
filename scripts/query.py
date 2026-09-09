@@ -14,9 +14,13 @@ from datadog_api_client.v2.model.logs_aggregate_request import LogsAggregateRequ
 from datadog_api_client.v2.model.logs_query_filter import LogsQueryFilter
 from datadog_api_client.v2.model.logs_compute import LogsCompute
 from datadog_api_client.v2.model.logs_aggregation_function import LogsAggregationFunction
+from datadog_api_client.v2.model.logs_group_by import LogsGroupBy
+from datadog_api_client.v2.model.logs_aggregate_sort import LogsAggregateSort
+from datadog_api_client.v2.model.logs_aggregate_sort_type import LogsAggregateSortType
 from datadog_api_client.v2.model.logs_list_request import LogsListRequest
 from datadog_api_client.v2.model.logs_list_request_page import LogsListRequestPage
 from datadog_api_client.v2.model.logs_sort import LogsSort
+from datadog_api_client.v2.model.logs_sort_order import LogsSortOrder
 from datadog_api_client.v2.model.events_request_page import EventsRequestPage
 
 
@@ -171,14 +175,29 @@ def query_log_count_aggregate(dd_config: Configuration, query_string: str, time_
                     LogsCompute(
                         aggregation=LogsAggregationFunction.COUNT
                     )
+                ],
+                group_by=[
+                    LogsGroupBy(
+                        facet="@http.url_details.path",
+                        sort=LogsAggregateSort(
+                            aggregation="count",
+                            order=LogsSortOrder("desc"),
+                            type=LogsAggregateSortType.MEASURE,
+                        ),
+                    ),
                 ]
+                
             )
         )
 
+        top_list = []
+        for bucket in response.data.buckets:
+             top_list.append({
+                "path": bucket.by.get("@http.url_details.path"),
+                "count": int(bucket.computes.get('c0', 0))
+            })
 
-        aggregate = 0
-        if response.data.buckets and len(response.data.buckets) > 0:
-            aggregate = int(response.data.buckets[0].computes.get('c0', 0))
-        logger.info(f"Aggregate log count query returned {aggregate} matching entries.")
+        logger.info(f"Top paths: {top_list}")
+        logger.info(f"Aggregate log count query returned {sum(item['count'] for item in top_list)} matching entries.")
 
-        return aggregate
+        return response, top_list

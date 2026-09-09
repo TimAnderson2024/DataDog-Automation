@@ -23,22 +23,24 @@ class Result:
     def __init__(
         self,
         name: str,
-        query: str,
         type: str,
-        raw: int | list[dict],
-        aggregate: int,
-        yellow_threshold: int,
-        red_threshold: int,
-        manual_threshold: int,
+        timerange: tuple[str, str],
+        query_config: dict,
+        dd_config: Configuration,
     ):
-        self.name = name
-        self.query = query
-        self.type = type
-        self.raw = raw
-        self.aggregate = aggregate
-        self.yellow_threshold = yellow_threshold
-        self.red_threshold = red_threshold
 
+        self.name = name
+        self.type = type
+        self.timerange = timerange
+        self.dd_config = dd_config
+
+        self.query = query_config.get("query")
+        self.red_threshold = query_config.get("red_threshold")
+        self.yellow_threshold = query_config.get("yellow_threshold", self.red_threshold)
+        self.manual_threshold = query_config.get("manual_threshold", 1)
+
+    
+    def set_alert_levels(self):
         if self.aggregate >= self.red_threshold:
             self.alert_level = 2
         elif self.aggregate >= self.yellow_threshold:
@@ -46,11 +48,76 @@ class Result:
         else:
             self.alert_level = 0
 
-        if self.aggregate >= manual_threshold:
+        if self.aggregate >= self.manual_threshold:
             self.manual_review = True
         else:
             self.manual_review = False
 
+class AggregateResult(Result):
+    sorted: list[dict[str, int]] # Sorted list of {Path, Count} dicts
+
+    def __init__(
+        self,
+        name: str,
+        type: str,
+        timerange: tuple[str, str],
+        query_config: dict,
+        dd_config: Configuration,
+    ):
+        super().__init__(name, type, timerange, query_config, dd_config)
+
+        self.raw, self.sorted = q.query_log_count_aggregate(dd_config, self.query, timerange)
+        self.aggregate = sum(item['count'] for item in self.sorted)
+        self.set_alert_levels()
+
+class LogResult(Result):
+    def __init__(
+        self,
+        name: str,
+        type: str,
+        timerange: tuple[str, str],
+        query_config: dict,
+        dd_config: Configuration,
+    ):
+        super().__init__(name, type, timerange, query_config, dd_config)
+
+        self.raw = q.query_logs(dd_config, self.query, timerange)
+        self.aggregate = len(self.raw)
+        self.set_alert_levels()
+
+class EventResult(Result):
+    def __init__(
+        self,
+        name: str,
+        type: str,
+        timerange: tuple[str, str],
+        query_config: dict,
+        dd_config: Configuration,
+    ):
+        super().__init__(name, type, timerange, query_config, dd_config)
+
+        self.raw = q.query_events(dd_config, self.query, timerange)
+        self.aggregate = len(self.raw)
+        self.set_alert_levels()
+
+class SyntheticResult(Result):
+    def __init__(
+        self,
+        name: str,
+        type: str,
+        timerange: tuple[str, str],
+        query_config: dict,
+        dd_config: Configuration,
+    ):
+        super().__init__(name, type, timerange, query_config, dd_config)
+
+        self.raw = q.query_synthetic_test(dd_config, self.query, timerange)
+        self.aggregate = 0
+        for test in self.raw:
+            if not test["result"]["passed"]:
+                self.aggregate += 1
+
+        self.set_alert_levels()
 
 class EnvData:
     env: str
@@ -130,12 +197,13 @@ class EnvData:
 
 class EnvDataFactory:
     query_map = {
-        "aggregate": q.query_log_count_aggregate,
-        "log": q.query_logs,
-        "synthetic": q.query_synthetic_test,
-        "event": q.query_events,
+        "aggregate": AggregateResult,
+        "log": LogResult,
+        "synthetic": SyntheticResult,
+        "event": EventResult,
     }
 
+    @staticmethod
     def _envdata_factory(env_config: dict, queries: dict, start: str, end: str):
         env_data = EnvData(env_config, start, end)
 
@@ -143,35 +211,18 @@ class EnvDataFactory:
         for query_name, query_config in queries.items():
             query_config: dict
             query_type = query_config.get("type")
-            query = query_config.get("query")
-            red_threshold = query_config.get("red_threshold")
-            yellow_threshold = query_config.get("yellow_threshold", red_threshold)
-            manual_threshold = query_config.get("manual_threshold", 1)
-
-            fetch_query = EnvDataFactory.query_map.get(query_type)
             
             logger.info(f"Running query '{query_name}' of type '{query_type}'")
-            raw_result = fetch_query(env_data.dd_config, query, env_data.timerange)
             
-            aggregate = raw_result
-            if query_type in ["log", "event"]:
-                aggregate = len(raw_result)
-            elif query_type == "synthetic":
-                aggregate = 0
-                for test in raw_result:
-                    if not test["result"]["passed"]:
-                        aggregate += 1
-            
-            new_result = Result(
+            result_class = EnvDataFactory.query_map[query_type]
+            new_result = result_class(
                 name=query_name,
-                query=query,
                 type=query_type,
-                raw=raw_result,
-                aggregate=aggregate,
-                yellow_threshold=yellow_threshold,
-                red_threshold=red_threshold,
-                manual_threshold=manual_threshold,
+                timerange=env_data.timerange,
+                query_config=query_config,
+                dd_config=env_data.dd_config,
             )
+            
             env_data.add_result(new_result)
 
         return env_data
