@@ -117,10 +117,15 @@ class SlackMessenger:
         for err in ["504", "502", "oom"]:
             result = all_results.get(err)
             err_text = err_text + f"*{self.get_status_icon(result)} {err}:* {result.aggregate} \n"
+            if err in ["504", "502"]:
+                for path in result.sorted[:5]:
+                    err_text = err_text + f"\t\t• {path['count']}: `{path['path']}`\n"
         if all_results.get("503").aggregate > 0:
             result = all_results.get("503")
             err_text = err_text + f"*{self.get_status_icon(result)} 503:* {result.aggregate} \n"
-        env_blocks.append({"type": "mrkdwn", "text": err_text})
+            for path in result.sorted[:5]:
+                err_text = err_text + f"\t\t• {path['count']}: `{path['path']}`\n"
+        env_blocks.append({"type": "section", "text": {"type": "mrkdwn", "text": err_text}})
 
         synthetic_results = env.synthetic_results
         if synthetic_results and len(synthetic_results.values()) > 0:
@@ -129,7 +134,7 @@ class SlackMessenger:
                 icon = "✅" if result.aggregate == 0 else "🔴"
                 synthetic_parts.append(f"`{result.name}` ({result.aggregate}) {icon} ")
             synthetic_text = "*Synthetic:* " + "\n".join(synthetic_parts)
-            env_blocks.append({"type": "mrkdwn", "text": synthetic_text})
+            env_blocks.append({"type": "section", "text": {"type": "mrkdwn", "text": synthetic_text}})
 
         return env_blocks
     
@@ -175,10 +180,10 @@ class SlackMessenger:
                     "type": "mrkdwn",
                     "text": f"*{env.env}*",
                 },
-                "fields": self.build_env_fields(env)
             }
 
             self.message_blocks.append(env_block)
+            self.message_blocks.extend(self.build_env_fields(env))
             oom_context = self.build_oom_context(env)
             if oom_context:
                 self.message_blocks.append(oom_context)
