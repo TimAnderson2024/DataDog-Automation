@@ -184,20 +184,27 @@ def query_log_count_aggregate(dd_config: Configuration, query_string: str, time_
                             order=LogsSortOrder("desc"),
                             type=LogsAggregateSortType.MEASURE,
                         ),
+                        total=True,
                     ),
                 ]
                 
             )
         )
-
+        
         top_list = []
+        total = 0
         for bucket in response.data.buckets:
-             top_list.append({
-                "path": bucket.by.get("@http.url_details.path"),
-                "count": int(bucket.computes.get('c0', 0))
-            })
+            if bucket.by.get("@http.url_details.path") == "__TOTAL__":
+                total = int(bucket.computes.get('c0', 0))
+            else:
+                top_list.append({
+                    "path": bucket.by.get("@http.url_details.path"),
+                    "count": int(bucket.computes.get('c0', 0))
+                })
 
+
+        logger.info(f"Aggregate error count: {total}")
         logger.info(f"Top paths: {top_list}")
         logger.info(f"Aggregate log count query returned {sum(item['count'] for item in top_list)} matching entries.")
 
-        return response, top_list
+        return response, total, top_list

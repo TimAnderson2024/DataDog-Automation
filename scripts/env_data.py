@@ -66,8 +66,8 @@ class AggregateResult(Result):
     ):
         super().__init__(name, type, timerange, query_config, dd_config)
 
-        self.raw, self.sorted = q.query_log_count_aggregate(dd_config, self.query, timerange)
-        self.aggregate = sum(item['count'] for item in self.sorted)
+        self.raw, self.aggregate, self.sorted = q.query_log_count_aggregate(dd_config, self.query, timerange)
+
         self.set_alert_levels()
 
 class LogResult(Result):
