@@ -57,6 +57,17 @@ def get_v1_dd_config(env_config: dict) -> V1Configuration:
 
     return v1_ddconfig
 
+def send_query_with_backoff(func, *args, **kwargs):
+    while True:
+        try:
+            return func(*args, **kwargs)
+        except Exception as e:
+            if e.status == 429:
+                reset_timer = int(e.headers.get('x-ratelimit-reset', 1))
+                time.sleep(reset_timer + 0.1)
+            else:
+                raise e
+
 def query_logs(dd_config: Configuration, query_string: str, time_range: tuple[int, int]) -> list[dict]:
     with ApiClient(dd_config) as api_client:
         api_instance = LogsApi(api_client)
@@ -73,7 +84,7 @@ def query_logs(dd_config: Configuration, query_string: str, time_range: tuple[in
         all_logs = []
         logs_processed = 0
         while True:
-            response = api_instance.list_logs(body=query_body)
+            response = send_query_with_backoff(api_instance.list_logs, body=query_body)
             response_data = response.data
             response_metadata = response.meta.to_dict()
 
@@ -87,6 +98,7 @@ def query_logs(dd_config: Configuration, query_string: str, time_range: tuple[in
     logger.info(f"Finished processing logs. Total matching entries retrieved: {len(all_logs)}")
     return all_logs
 
+# DEPRECATED
 def query_metric(dd_config: V1Configuration, query_string: str, time_range: tuple[int, int]) -> list[dict]:
     with ApiClient(dd_config) as api_client:
         api_instance = V1MetricsApi(api_client)
@@ -118,7 +130,7 @@ def query_events(dd_config: Configuration, query_string: str, time_range: tuple[
 
         all_logs = []
         while True:
-            response = api_instance.search_events(body=query_body)
+            response = send_query_with_backoff(api_instance.search_events, body=query_body)
             response_data = response.data
             response_metadata = response.meta.to_dict()
 
@@ -134,13 +146,13 @@ def query_synthetic_test(dd_config: Configuration, test_id: str, time_range) -> 
     time_from, time_to = time_range[0], time_range[1]
 
     with ApiClient(dd_config) as api_client:
-        api_instance = SyntheticsApi(api_client)
+        api_instance = SyntheticsApi(api_client) 
 
         # Paginate results using last_timestamp_fetched (API output cuts off at 150 results)
         synthetic_test_results = []
         logger.info(f"Fetching synthetic results from {time.unix_to_iso(time_from)} to {time.unix_to_iso(time_to)}")
         while time_to > time_from:
-            query_response = api_instance.get_api_test_latest_results(public_id=test_id, from_ts=time_from, to_ts=time_to).to_dict()
+            query_response = send_query_with_backoff(api_instance.get_api_test_latest_results, public_id=test_id, from_ts=time_from, to_ts=time_to).to_dict()
             time_to = query_response["last_timestamp_fetched"]
             synthetic_test_results += query_response["results"]
 
@@ -164,32 +176,31 @@ def query_log_count_aggregate(dd_config: Configuration, query_string: str, time_
     with ApiClient(dd_config) as api_client:
         api_instance = LogsApi(api_client)
 
-        response = api_instance.aggregate_logs(
-            body=LogsAggregateRequest(
-                filter=LogsQueryFilter(
-                    query=query_string,
-                    _from=str(time_range[0]),
-                    to=str(time_range[1]) 
-                ),
-                compute=[
-                    LogsCompute(
-                        aggregation=LogsAggregationFunction.COUNT
-                    )
-                ],
-                group_by=[
-                    LogsGroupBy(
-                        facet="@http.url_details.path",
-                        sort=LogsAggregateSort(
-                            aggregation="count",
-                            order=LogsSortOrder("desc"),
-                            type=LogsAggregateSortType.MEASURE,
-                        ),
-                        total=True,
+        body=LogsAggregateRequest(
+            filter=LogsQueryFilter(
+                query=query_string,
+                _from=str(time_range[0]),
+                to=str(time_range[1]) 
+            ),
+            compute=[
+                LogsCompute(
+                    aggregation=LogsAggregationFunction.COUNT
+                )
+            ],
+            group_by=[
+                LogsGroupBy(
+                    facet="@http.url_details.path",
+                    sort=LogsAggregateSort(
+                        aggregation="count",
+                        order=LogsSortOrder("desc"),
+                        type=LogsAggregateSortType.MEASURE,
                     ),
-                ]
-                
-            )
+                    total=True,
+                ),
+            ]
         )
+                
+        response = send_query_with_backoff(api_instance.aggregate_logs, body=body)
         
         top_list = []
         total = 0
