@@ -26,7 +26,7 @@ class AppConfig:
         self.output_path = Path("output")
         self.query_path = Path("queries.json")
         self.template_path = Path("slack_template.md")
-        self.output_channel_id = "C07050LEJA3"
+        self.output_channel_id = "C0ALY9QJ30T"
         # Live channel: "C07050LEJA3"
         # Test channel: "C0ALY9QJ30T"
         # self.output_channel_id = "{{ .Values.dailyMonitoring.slackChannelId }}"

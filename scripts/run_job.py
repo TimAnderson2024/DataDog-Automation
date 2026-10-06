@@ -41,7 +41,7 @@ JINJA_TEMPLATE = """
 
 QUERIES = [
   {
-    "name": "ULP",
+    "name": "SBA-ULP",
     "API_KEY": "DD_ULP_API_KEY",
     "APP_KEY": "DD_ULP_APP_KEY",
     "queries": {
@@ -78,7 +78,7 @@ QUERIES = [
     }
   },
   {
-    "name": "CLS",
+    "name": "SBA-CLS",
     "API_KEY": "DD_ULP_API_KEY",
     "APP_KEY": "DD_ULP_APP_KEY",
     "queries": {
@@ -250,7 +250,7 @@ QUERIES = [
     }
   },
   {
-      "name": "USDA",
+      "name": "USDA-Prod",
       "DD_URL": "ddog-gov.com",
       "API_KEY": "FEDHIVE_USDA_API_KEY",
       "APP_KEY": "FEDHIVE_USDA_APP_KEY",
@@ -277,6 +277,35 @@ QUERIES = [
           "red_threshold": 1
         }
       }
+  },
+  {
+    "name": "USDA-UAT",
+    "DD_URL": "ddog-gov.com",
+    "API_KEY": "FEDHIVE_USDA_API_KEY",
+    "APP_KEY": "FEDHIVE_USDA_APP_KEY",
+    "queries": {
+      "504": {
+        "type": "aggregate",
+        "query": "env:multi service:elb (@http.url_details.host:ulp.uat.multi.prosperus.usda.gov OR @http.url_details.host:oauth.uat.multi.prosperus.usda.gov) status:error @http.status_code:504",
+        "red_threshold": 1
+      },
+      "502": {
+        "type": "aggregate",
+        "query": "env:multi service:elb (@http.url_details.host:ulp.uat.multi.prosperus.usda.gov OR @http.url_details.host:oauth.uat.multi.prosperus.usda.gov) status:error @http.status_code:502",
+        "red_threshold": 1
+      },
+      "503": {
+        "type": "aggregate",
+        "query": "env:multi service:elb (@http.url_details.host:ulp.uat.multi.prosperus.usda.gov OR @http.url_details.host:oauth.uat.multi.prosperus.usda.gov) status:error @http.status_code:503",
+        "red_threshold": 1,
+        "manual_threshold": 1
+      },
+      "oom": {
+        "type": "event",
+        "query": "env:multi service:elb status:error (OutOfMemoryError OR \"out of memory\" OR OOM)",
+        "red_threshold": 1
+      }
+    }
   },
   {
     "name": "Other Synthetic Tests",

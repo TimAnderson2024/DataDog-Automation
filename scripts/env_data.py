@@ -1,6 +1,6 @@
 import logging
 import sys
-import json
+import time
 
 import query as q
 import time_utils
@@ -209,6 +209,9 @@ class EnvDataFactory:
 
         logger.info(f"Sending queries for environment: {env_config['name']}")
         for query_name, query_config in queries.items():
+            if env_config["name"] == "USDA-Prod" or env_config["name"] == "USDA-UAT":
+                time.sleep(6)
+                
             query_config: dict
             query_type = query_config.get("type")
             
