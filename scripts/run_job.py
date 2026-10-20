@@ -123,20 +123,20 @@ QUERIES = [
     "queries": {
       "504": {
         "type": "aggregate",
-        "query": "env:prod status:error @http.status_code:504",
+        "query": "env:prod status:error @http.status_code:504 service:elb",
         "manual_threshold": 7, 
         "yellow_threshold": 1,
         "red_threshold": 6
       },
       "502": {
         "type": "aggregate",
-        "query": "env:prod status:error @http.status_code:502",
+        "query": "env:prod status:error @http.status_code:502 service:elb",
         "yellow_threshold": 2,
         "red_threshold": 8
       },
       "503": {
         "type": "aggregate",
-        "query": "env:prod status:error @http.status_code:503",
+        "query": "env:prod status:error @http.status_code:503 service:elb",
         "red_threshold": 1,
         "manual_threshold": 1
       },
@@ -162,17 +162,17 @@ QUERIES = [
     "queries": {
       "504": {
         "type": "aggregate",
-        "query": "env:(urif-prod OR urif-prod-main) status:error @http.status_code:504",
+        "query": "env:(urif-prod OR urif-prod-main) status:error @http.status_code:504 service:elb",
         "red_threshold": 1
       },
       "502": {
         "type": "aggregate",
-        "query": "env:(urif-prod OR urif-prod-main) status:error @http.status_code:502",
+        "query": "env:(urif-prod OR urif-prod-main) status:error @http.status_code:502 service:elb",
         "red_threshold": 1
       },
       "503": {
         "type": "aggregate",
-        "query": "env:(urif-prod OR urif-prod-main) status:error @http.status_code:503",
+        "query": "env:(urif-prod OR urif-prod-main) status:error @http.status_code:503 service:elb",
         "red_threshold": 1,
         "manual_threshold": 1
       },
@@ -195,17 +195,17 @@ QUERIES = [
     "queries": {
       "504": {
         "type": "aggregate",
-        "query": "env:(usalending-prod OR usalending-prod-main) status:error @http.status_code:504",
+        "query": "env:(usalending-prod OR usalending-prod-main) status:error @http.status_code:504 service:elb",
         "red_threshold": 1
       },
       "502": {
         "type": "aggregate",
-        "query": "env:(usalending-prod OR usalending-prod-main) status:error @http.status_code:502",
+        "query": "env:(usalending-prod OR usalending-prod-main) status:error @http.status_code:502 service:elb",
         "red_threshold": 1
       },
       "503": {
         "type": "aggregate",
-        "query": "env:(usalending-prod OR usalending-prod-main) status:error @http.status_code:503",
+        "query": "env:(usalending-prod OR usalending-prod-main) status:error @http.status_code:503 service:elb",
         "red_threshold": 1,
         "manual_threshold": 1
       },
@@ -228,17 +228,17 @@ QUERIES = [
     "queries": {
       "504": {
         "type": "aggregate",
-        "query": "env:ace-prod status:error @http.status_code:504",
+        "query": "env:ace-prod status:error @http.status_code:504 service:elb",
         "red_threshold": 1
       },
       "502": {
         "type": "aggregate",
-        "query": "env:ace-prod status:error @http.status_code:502",
+        "query": "env:ace-prod status:error @http.status_code:502 service:elb",
         "red_threshold": 1
       },
       "503": {
         "type": "aggregate",
-        "query": "env:ace-prod status:error @http.status_code:503",
+        "query": "env:ace-prod status:error @http.status_code:503 service:elb",
         "red_threshold": 1,
         "manual_threshold": 1
       },
@@ -257,17 +257,17 @@ QUERIES = [
       "queries": {
         "504": {
           "type": "aggregate",
-          "query": "env:usda status:error @http.status_code:504",
+          "query": "env:usda status:error @http.status_code:504 service:elb",
           "red_threshold": 1
         },
         "502": {
           "type": "aggregate",
-          "query": "env:usda status:error @http.status_code:502",
+          "query": "env:usda status:error @http.status_code:502 service:elb",
           "red_threshold": 1
         },
         "503": {
           "type": "aggregate",
-          "query": "env:usda status:error @http.status_code:503",
+          "query": "env:usda status:error @http.status_code:503 service:elb",
           "red_threshold": 1,
           "manual_threshold": 1
         },
